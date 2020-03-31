@@ -1,0 +1,329 @@
+From e0f9fd365b8d2eae104d3a4aeccf1cec2c3df7f3 Mon Sep 17 00:00:00 2001
+From: Alex Aubuchon <alex@aub.dev>
+Date: Wed, 29 May 2019 15:47:10 -0700
+Subject: [PATCH] test: move foafssl certs to fixtures/keys/
+
+PR-URL: https://github.com/nodejs/node/pull/27962
+Reviewed-By: Sam Roberts <vieuxtech@gmail.com>
+Reviewed-By: Ujjwal Sharma <usharma1998@gmail.com>
+Reviewed-By: Rich Trott <rtrott@gmail.com>
+(cherry picked from commit 0ee02c7a1c52739bd5e7fec5ae55eecacbeaf39d)
+
+Cherrypick updated certs references by foafssl test.
+---
+ test/fixtures/foafssl.crt                     | 25 ---------------
+ test/fixtures/foafssl.key                     | 32 -------------------
+ test/fixtures/keys/rsa_cert.crt               | 24 ++++++++++++++
+ test/fixtures/keys/rsa_cert_foafssl_b.cnf     | 24 ++++++++++++++
+ test/fixtures/keys/rsa_cert_foafssl_b.crt     | 24 ++++++++++++++
+ .../fixtures/keys/rsa_cert_foafssl_b.exponent |  1 +
+ test/fixtures/keys/rsa_cert_foafssl_b.modulus |  1 +
+ test/fixtures/keys/rsa_private.pem            | 27 ++++++++++++++++
+ test/fixtures/keys/rsa_private_b.pem          | 27 ++++++++++++++++
+ test/parallel/test-https-foafssl.js           | 24 ++++++--------
+ 10 files changed, 137 insertions(+), 72 deletions(-)
+ delete mode 100644 test/fixtures/foafssl.crt
+ delete mode 100644 test/fixtures/foafssl.key
+ create mode 100644 test/fixtures/keys/rsa_cert.crt
+ create mode 100644 test/fixtures/keys/rsa_cert_foafssl_b.cnf
+ create mode 100644 test/fixtures/keys/rsa_cert_foafssl_b.crt
+ create mode 100644 test/fixtures/keys/rsa_cert_foafssl_b.exponent
+ create mode 100644 test/fixtures/keys/rsa_cert_foafssl_b.modulus
+ create mode 100644 test/fixtures/keys/rsa_private.pem
+ create mode 100644 test/fixtures/keys/rsa_private_b.pem
+
+diff --git a/test/fixtures/foafssl.crt b/test/fixtures/foafssl.crt
+deleted file mode 100644
+index f4b5905e37..0000000000
+--- a/test/fixtures/foafssl.crt
++++ /dev/null
+@@ -1,25 +0,0 @@
+-Bag Attributes
+-    friendlyName: Me's Not a Certification Authority ID
+-    localKeyID: 98 CC 02 91 83 8D 14 4A 60 40 B7 11 E8 EF A9 01 4B D7 16 8A 
+-subject=/O=FOAF+SSL/OU=The Community Of Self Signers/UID=http://example.com/#me/CN=Me
+-issuer=/O=FOAF+SSL/OU=The Community of Self Signers/CN=Not a Certification Authority
+------BEGIN CERTIFICATE-----
+-MIIDVDCCAr2gAwIBAgIQRLIhwZ2N3ciEdpWb6kPmPzANBgkqhkiG9w0BAQUFADBj
+-MREwDwYDVQQKDAhGT0FGK1NTTDEmMCQGA1UECwwdVGhlIENvbW11bml0eSBvZiBT
+-ZWxmIFNpZ25lcnMxJjAkBgNVBAMMHU5vdCBhIENlcnRpZmljYXRpb24gQXV0aG9y
+-aXR5MB4XDTExMDgzMDE3MzIwNFoXDTEyMDgyMDE5MzIwNFowcDERMA8GA1UECgwI
+-Rk9BRitTU0wxJjAkBgNVBAsMHVRoZSBDb21tdW5pdHkgT2YgU2VsZiBTaWduZXJz
+-MSYwJAYKCZImiZPyLGQBAQwWaHR0cDovL2V4YW1wbGUuY29tLyNtZTELMAkGA1UE
+-AwwCTWUwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCm9EqcJXkUMSFP
+-XIevngQBd6i7iayAP34Ju8OlUZ80nNm5xAvkNtCqgjqUFH4myJJIraK+PdTTTowo
+-lkaUsgR9IXtPEpk3Hqk6g8iauUQHJBMeZfKwFh3pVgzenBNFVVKy9Jzw+wDY13Uy
+-MkkT9vgP8p0KEx0p2wav+L4ZG3kg3C2uHCbqgqR4R6EDke879qq7PMQP+CEAsDpP
+-D/GAknjk3f2n3pVO1W3HrZpH7rw313GjZvxgpby3I3O+wYBkmz76DpCScHIQtBuQ
+-Ayuxi8kfIEbr2vEZH0pOJtcYecTHhnti/NUI6M5m6C0SinHpFYCfz0To3ndAZ/He
+-XXC5wDaHAgMBAAGjeDB2MAwGA1UdEwEB/wQCMAAwDgYDVR0PAQH/BAQDAgLsMBEG
+-CWCGSAGG+EIBAQQEAwIFoDAdBgNVHQ4EFgQU3gJIUFpe8rKklsjEdsxlaT6rZhow
+-JAYDVR0RAQH/BBowGIYWaHR0cDovL2V4YW1wbGUuY29tLyNtZTANBgkqhkiG9w0B
+-AQUFAAOBgQBLhwWbYMdeSkVZ4biVUle+XHP4Gv8V9WSfldvgn1PntS1lpVR46Exl
+-AkLO1SrnN5WHeAjv6VNb3KmTF+QhLt/4a1l9CEEeZSg5ml5aeXE+veobgypDoam+
+-NKYAeIW9Wx+HcgBL4leIX3WiCKu/eal+a5ro18LQ8hkZqryHeVESIw==
+------END CERTIFICATE-----
+diff --git a/test/fixtures/foafssl.key b/test/fixtures/foafssl.key
+deleted file mode 100644
+index 62e953a67f..0000000000
+--- a/test/fixtures/foafssl.key
++++ /dev/null
+@@ -1,32 +0,0 @@
+-Bag Attributes
+-    friendlyName: Me's Not a Certification Authority ID
+-    localKeyID: 98 CC 02 91 83 8D 14 4A 60 40 B7 11 E8 EF A9 01 4B D7 16 8A 
+-Key Attributes: <No Attributes>
+------BEGIN PRIVATE KEY-----
+-MIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQCm9EqcJXkUMSFP
+-XIevngQBd6i7iayAP34Ju8OlUZ80nNm5xAvkNtCqgjqUFH4myJJIraK+PdTTTowo
+-lkaUsgR9IXtPEpk3Hqk6g8iauUQHJBMeZfKwFh3pVgzenBNFVVKy9Jzw+wDY13Uy
+-MkkT9vgP8p0KEx0p2wav+L4ZG3kg3C2uHCbqgqR4R6EDke879qq7PMQP+CEAsDpP
+-D/GAknjk3f2n3pVO1W3HrZpH7rw313GjZvxgpby3I3O+wYBkmz76DpCScHIQtBuQ
+-Ayuxi8kfIEbr2vEZH0pOJtcYecTHhnti/NUI6M5m6C0SinHpFYCfz0To3ndAZ/He
+-XXC5wDaHAgMBAAECggEAEhwrv7Zc5PDTYS1zVnx4iMQ3HGi5uouom1uvxE4PTAC7
+-qWf3tkCv798Cha+XY5OcMqALKEHCxU0e7QQoEdchn4UzQAePcSg1STCkYQw5seCa
+-5lA+vBUaF4aLDNa3TG0N9HWOVKGVnO/6OYC05qKClBBIMqCSKEkm942u6UBOql6q
+-71Sj1Nd/4eP9AcvgO5cgyUszM2I25LzXIZW7JLgdqXiJRj8CuY3X5FVURvadENgk
+-ctw5EjdT7LNdc67Ot9Bs6qcVr2ld/U+4ZSC2+cqtPyn7mnA4hrYXlpA1Ilv3oRwZ
+-aUJfG5HVV4jjNVHxDqddBh3UhOxJYZ1DNEMndTBx8QKBgQDcsrLfkE6utaj8w/of
+-Hk/aq1JRNLgSvhoP2wVmK7USvYFj7DIvL4CqyghY5TLgNk272v8mT0Q7R6AtsOUk
+-Gf50uZFAtIoPvTsvBu6cbRsPTeGJ0i1+LLme/AJu3MexXLF6mlzoGmlx8V7CoFqI
+-9hvqBA5rZ6ecoSjmU2q2xWKXKQKBgQDBqNqicSp2jnHiTXYbG/tsnxhFwALdEjvb
+-EgZprmoBzo1eQFOY/DNBdDiEZBstu9mJBX3XWTU1F4c6tYRocNCMDwLBZAB6NnVM
+-JjoddJApa5Qg3uoXmk53saZhcVkOzh+P/Dxg9c9O3q4DDUegnkM95ZSbCPtIBq6K
+-bPA3OS+GLwKBgQCY0022LjGuHbFlRzg+sDjPzW71OLJ2mBln/VyhwYZj8cJVtUuT
+-DSvmGHzrQduXE0OE4ENq/dzbx9+NhD9IXo+ruIxy6BHqkDkZeY1l2M+yK1YQn/BM
+-vR/UjeIJbu0BTpS/t4C6YP+/nUrnLy9CRFpUFHb/vQl+FsNBq2XsJob88QKBgQCD
+-6B5bbNduf2HEsdxTZMDhYJAo2jtZFxVcBzAFBb7A0k7qNsh6OLY0zBO+4Wy9vujR
+-8sKfTuz157u9WmwAs27pJ0RKM3I7zCIjJxqIe5/CBruTlCJAx2LRFljsoEb31aAb
+-88Owi12ULAq8m2wBVCsa2uhYnUqC6cIzGTaZdsMPEwKBgQDJXI+J2d36IWzFrByH
+-yskssFldbLxm/7EexzAYuoSpHuQIxGJYHTHn6CZhqrX8UbxVnS909ES+17kdLZVP
+-egvaxn1mtfZInnH64PiQDQrsNnbP4Zg8yvLvIcEVIPqnSQ5QrhdR29tjYuDwUIKM
+-4BMR2yfkFp6URRX7ZD1UQsduww==
+------END PRIVATE KEY-----
+diff --git a/test/fixtures/keys/rsa_cert.crt b/test/fixtures/keys/rsa_cert.crt
+new file mode 100644
+index 0000000000..21878a39b2
+--- /dev/null
++++ b/test/fixtures/keys/rsa_cert.crt
+@@ -0,0 +1,24 @@
++-----BEGIN CERTIFICATE-----
++MIIEAjCCAuqgAwIBAgIUf4Z4DKj5kJW60NE+9PaucYFlft8wDQYJKoZIhvcNAQEL
++BQAwgbAxCzAJBgNVBAYTAlVLMRQwEgYDVQQIDAtBY2tuYWNrIEx0ZDETMBEGA1UE
++BwwKUmh5cyBKb25lczEQMA4GA1UECgwHbm9kZS5qczEdMBsGA1UECwwUVGVzdCBU
++TFMgQ2VydGlmaWNhdGUxFDASBgNVBAsMC0VuZ2luZWVyaW5nMRIwEAYDVQQDDAls
++b2NhbGhvc3QxGzAZBgkqhkiG9w0BCQEWDGFsZXhAYXViLmRldjAgFw0xOTA2Mjgy
++MTM2NDhaGA8yMjkzMDQxMTIxMzY0OFowgbAxCzAJBgNVBAYTAlVLMRQwEgYDVQQI
++DAtBY2tuYWNrIEx0ZDETMBEGA1UEBwwKUmh5cyBKb25lczEQMA4GA1UECgwHbm9k
++ZS5qczEdMBsGA1UECwwUVGVzdCBUTFMgQ2VydGlmaWNhdGUxFDASBgNVBAsMC0Vu
++Z2luZWVyaW5nMRIwEAYDVQQDDAlsb2NhbGhvc3QxGzAZBgkqhkiG9w0BCQEWDGFs
++ZXhAYXViLmRldjCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALfcWIiK
++J7HAt78/wNnHkeyoWWZQ7v+W8nud5wlU3Cp1ndrHmOlAHSnq7F+p46/Nw3eTlXtQ
++Vv8Cb6eRI1kwBmGxbMJTZng+OHnRBjPd/Qei6vv/IgZK04vJhjeGAsrYrxNuGCNA
+++F2TD35C0qWm9svx8uA40CgatU4WdFAZyvvSIV9+ybv2aBmEpUyBiIc8momAYe8K
++2QaD3MyBLunrf5DdlZ520VLZGExfe4IHL+YfoQ6VEI0FtGYDjHE3PJ/kZBqSLdP4
++jP204yN08/4LBXYuoR3KWYG6KTy+t9NveogcsooEAjyVc3brBa0DeQ3gvs0/5xsq
++UJGWpy2+GbKUsfUCAwEAAaMQMA4wDAYDVR0TBAUwAwEB/zANBgkqhkiG9w0BAQsF
++AAOCAQEAD2FBwUO9iV4VBrpTdUEd0Y39ajJsdbbnNkJ/N1ZbJgdymCLfVpzCqB+s
++qRjpq9JqGtcxwzPG7GGu+OIXCGMfeMzFkk2cjLeZic5uKcynFgru4bzrhGdb26Wq
++s8rQeXFOO6aRdpTVvIO+Vq5goRTXJhbtEzA9efmYWIOXcL5WDYhwApOc8rwfz9fm
++q8VZCW+KK23EU3gfyOcO14E0Al/K6lewX15K1Hh4P8cSnFtjtCqRRWmQi9JfdasS
++A0YJd8rN47dplRylTtXu5VFKL+XXa/jmlzsgtxBHX14onpVKqfGCvCLqj+AeZA3Y
++iX4iQjxnLr5DRtykOz+bKEYgX8AV8g==
++-----END CERTIFICATE-----
+diff --git a/test/fixtures/keys/rsa_cert_foafssl_b.cnf b/test/fixtures/keys/rsa_cert_foafssl_b.cnf
+new file mode 100644
+index 0000000000..38d6dd36f7
+--- /dev/null
++++ b/test/fixtures/keys/rsa_cert_foafssl_b.cnf
+@@ -0,0 +1,24 @@
++[ req ]
++days                   = 99999
++distinguished_name     = req_distinguished_name
++attributes             = req_attributes
++prompt                 = no
++x509_extensions        = v3_ca
++
++[ req_distinguished_name ]
++C                      = UK
++ST                     = "FOAF+SSL Auth Certificate"
++L                      = Rhys Jones
++O                      = node.js
++OU                     = Test TLS Certificate
++CN                     = localhost
++emailAddress           = alex@aub.dev
++
++[ req_attributes ]
++
++[ v3_ca ]
++basicConstraints       = CA:FALSE
++subjectAltName         = @alt_names
++
++[ alt_names ]
++URI                    = http://example.com/\#me
+diff --git a/test/fixtures/keys/rsa_cert_foafssl_b.crt b/test/fixtures/keys/rsa_cert_foafssl_b.crt
+new file mode 100644
+index 0000000000..fa4db56c1f
+--- /dev/null
++++ b/test/fixtures/keys/rsa_cert_foafssl_b.crt
+@@ -0,0 +1,24 @@
++-----BEGIN CERTIFICATE-----
++MIIEEDCCAvigAwIBAgIUAhzZrkGH3j4aXirSjA6n87moF9kwDQYJKoZIhvcNAQEL
++BQAwgagxCzAJBgNVBAYTAlVLMSIwIAYDVQQIDBlGT0FGK1NTTCBBdXRoIENlcnRp
++ZmljYXRlMRMwEQYDVQQHDApSaHlzIEpvbmVzMRAwDgYDVQQKDAdub2RlLmpzMR0w
++GwYDVQQLDBRUZXN0IFRMUyBDZXJ0aWZpY2F0ZTESMBAGA1UEAwwJbG9jYWxob3N0
++MRswGQYJKoZIhvcNAQkBFgxhbGV4QGF1Yi5kZXYwHhcNMTkwNTI5MjIzMjM1WhcN
++MTkwNjI4MjIzMjM1WjCBqDELMAkGA1UEBhMCVUsxIjAgBgNVBAgMGUZPQUYrU1NM
++IEF1dGggQ2VydGlmaWNhdGUxEzARBgNVBAcMClJoeXMgSm9uZXMxEDAOBgNVBAoM
++B25vZGUuanMxHTAbBgNVBAsMFFRlc3QgVExTIENlcnRpZmljYXRlMRIwEAYDVQQD
++DAlsb2NhbGhvc3QxGzAZBgkqhkiG9w0BCQEWDGFsZXhAYXViLmRldjCCASIwDQYJ
++KoZIhvcNAQEBBQADggEPADCCAQoCggEBAMm9YK6zftvX8XnhG02khI2ukyg06U/1
++l56qxQkvoeyGHJw6AFcHLD1ORWXlD7yyjM4vTR0id+C0Arq6h4B/F/nMNGE94HWE
++v+6qEIl7Psyr+teTXLbQ98ZUC3HmPjcM56D18smcDnmaslOR4qm66ruoXa+oEGKI
++DDS59jcQVtqRnoHevmRjAl9/vwbTD/+rV5rbWI2PsoTdkqxs+XCoVqXB4gul/ge7
++giqCmcvrdo1MWFSlMFq9WbjPJKUp7lQnL9TqDBhIphBwO7/3mhf8vs/1XUOGPPBo
++U51TeCm7YGfqPT6IY8SxVOtlXkwC4sVOZj0CkoEiAin43r9BVFLqxesCAwEAAaMw
++MC4wCQYDVR0TBAIwADAhBgNVHREEGjAYhhZodHRwOi8vZXhhbXBsZS5jb20vI21l
++MA0GCSqGSIb3DQEBCwUAA4IBAQBMRbs4ERIJmZz6GAaI85vbwR166S+g5rkNK8iZ
++jMAeSD9O2/ZT3JhGfh+f/m7cy1+RiARVSZOgd0nN/L6U6JlPbjtK92CpIx+gDw67
++lYV3QQCGU0tNQ1EFNzj6A7Mi/zSZ5wBbTi886xYztLPSjWEHt+8pShHga/Qi3alN
++3haN/UvyamKgmWna8s3zWrCEZwW7D+XQqWoA2EISlnIdX46agHgmU30+TalGDAzf
++OFwGvEfkyHTrrl6TxwdLU8fWsEcBOF6Ukg7kEc1aCBgd3cD9LI8g2N8DQdkWGGEQ
++innpMWv59H2v3gVMj/0/BPGthQMTHMrhKWZZ1QGjkId7tHro
++-----END CERTIFICATE-----
+diff --git a/test/fixtures/keys/rsa_cert_foafssl_b.exponent b/test/fixtures/keys/rsa_cert_foafssl_b.exponent
+new file mode 100644
+index 0000000000..ac0ecd6975
+--- /dev/null
++++ b/test/fixtures/keys/rsa_cert_foafssl_b.exponent
+@@ -0,0 +1 @@
++0x10001
+diff --git a/test/fixtures/keys/rsa_cert_foafssl_b.modulus b/test/fixtures/keys/rsa_cert_foafssl_b.modulus
+new file mode 100644
+index 0000000000..7f7f1f02cf
+--- /dev/null
++++ b/test/fixtures/keys/rsa_cert_foafssl_b.modulus
+@@ -0,0 +1 @@
++C9BD60AEB37EDBD7F179E11B4DA4848DAE932834E94FF5979EAAC5092FA1EC861C9C3A0057072C3D4E4565E50FBCB28CCE2F4D1D2277E0B402BABA87807F17F9CC34613DE07584BFEEAA10897B3ECCABFAD7935CB6D0F7C6540B71E63E370CE7A0F5F2C99C0E799AB25391E2A9BAEABBA85DAFA81062880C34B9F6371056DA919E81DEBE6463025F7FBF06D30FFFAB579ADB588D8FB284DD92AC6CF970A856A5C1E20BA5FE07BB822A8299CBEB768D4C5854A5305ABD59B8CF24A529EE54272FD4EA0C1848A610703BBFF79A17FCBECFF55D43863CF068539D537829BB6067EA3D3E8863C4B154EB655E4C02E2C54E663D029281220229F8DEBF415452EAC5EB
+diff --git a/test/fixtures/keys/rsa_private.pem b/test/fixtures/keys/rsa_private.pem
+new file mode 100644
+index 0000000000..215e5cc513
+--- /dev/null
++++ b/test/fixtures/keys/rsa_private.pem
+@@ -0,0 +1,27 @@
++-----BEGIN RSA PRIVATE KEY-----
++MIIEpQIBAAKCAQEAt9xYiIonscC3vz/A2ceR7KhZZlDu/5bye53nCVTcKnWd2seY
++6UAdKersX6njr83Dd5OVe1BW/wJvp5EjWTAGYbFswlNmeD44edEGM939B6Lq+/8i
++BkrTi8mGN4YCytivE24YI0D4XZMPfkLSpab2y/Hy4DjQKBq1ThZ0UBnK+9IhX37J
++u/ZoGYSlTIGIhzyaiYBh7wrZBoPczIEu6et/kN2VnnbRUtkYTF97ggcv5h+hDpUQ
++jQW0ZgOMcTc8n+RkGpIt0/iM/bTjI3Tz/gsFdi6hHcpZgbopPL630296iByyigQC
++PJVzdusFrQN5DeC+zT/nGypQkZanLb4ZspSx9QIDAQABAoIBAQCS2erYu8gyoGPi
++3E/zYgQ6ishFAZWzDWSFubwD5wSm4SSAzvViL/RbO6kqS25xR569DmLRiHzD17VI
++mJMsNECUnPrqR2TL256OJZaXrNHh3I1lUwVhEzjeKMsL4/ys+d70XPXoiocVblVs
++moDXEIGEqa48ywPvVE3Fngeuxrsq3/GCVBNiwtt0YjAOZxmKEh31UZdHO+YI+wNF
++/Z8KQCPscN5HGlR0SIQOlqMANz49aKStrevdvjS1UcpabzDEkuK84g3saJhcpAhb
++pGFmAf5GTjkkhE0rE1qDF15dSqrKGfCFtOjUeK17SIEN7E322ChmTReZ1hYGfoSV
++cdFntUINAoGBAPFKL5QeJ6wZu8R/ru11wTG6sQA0Jub2hGccPXpbnPrT+3CACOLI
++JTCLy/xTKW3dqRHj/wZEe+jUw88w7jwGb1BkWr4BI8tDvY9jQLP1jyuLWRfrxXbp
++4Z0oeBBwBeCI/ZG7FIvdDTqWxn1aj3Tmh6s4ByqEdtwrrrJPcBUNl01fAoGBAMMR
++3RGE/ca6X6xz6kgUD6TtHVhiiRJK1jm/u+q0n7i/MBkeDgTZkHYS7lPc0yIdtqaI
++Plz5yzwHnAvuMrv8LSdkjwioig2yQa3tAij8kXxqs7wN5418DMV2s1OJBrPthYPs
++bv4im2iI8V63JQS4ZMYQbckq8ABYccTpOnxXDy0rAoGBAKkvzHa+QjERhjB9GyoT
++1FhLQIsVBmYSWrp1+cGO9V6HPxoeHJzvm+wTSf/uS/FmaINL6+j4Ii4a6gWgmJts
++I6cqBtqNsAx5vjQJczf8KdxthBYa0sXTrsfktXNJKUXMqIgDtp9vazQ2vozs8AQX
++FPAAhD3SzgkJdCBBRSTt97ZfAoGAWAziKpxLKL7LnL4dzDcx8JIPIuwnTxh0plCD
++dCffyLaT8WJ9lXbXHFTjOvt8WfPrlDP/Ylxmfkw5BbGZOP1VLGjZn2DkH9aMiwNm
++bDXFPdG0G3hzQovx/9fajiRV4DWghLHeT9wzJfZabRRiI0VQR472300AVEeX4vgb
++rDBn600CgYEAk7czBCT9rHn/PNwCa17hlTy88C4vXkwbz83Oa+aX5L4e5gw5lhcR
++2ZuZHLb2r6oMt9rlD7EIDItSs+u21LOXWPTAlazdnpYUyw/CzogM/PN+qNwMRXn5
++uXFFhmlP2mVg2EdELTahXch8kWqHaCSX53yvqCtRKu/j76V31TfQZGM=
++-----END RSA PRIVATE KEY-----
+diff --git a/test/fixtures/keys/rsa_private_b.pem b/test/fixtures/keys/rsa_private_b.pem
+new file mode 100644
+index 0000000000..96d82ae2e2
+--- /dev/null
++++ b/test/fixtures/keys/rsa_private_b.pem
+@@ -0,0 +1,27 @@
++-----BEGIN RSA PRIVATE KEY-----
++MIIEpAIBAAKCAQEAyb1grrN+29fxeeEbTaSEja6TKDTpT/WXnqrFCS+h7IYcnDoA
++VwcsPU5FZeUPvLKMzi9NHSJ34LQCurqHgH8X+cw0YT3gdYS/7qoQiXs+zKv615Nc
++ttD3xlQLceY+NwznoPXyyZwOeZqyU5Hiqbrqu6hdr6gQYogMNLn2NxBW2pGegd6+
++ZGMCX3+/BtMP/6tXmttYjY+yhN2SrGz5cKhWpcHiC6X+B7uCKoKZy+t2jUxYVKUw
++Wr1ZuM8kpSnuVCcv1OoMGEimEHA7v/eaF/y+z/VdQ4Y88GhTnVN4KbtgZ+o9Pohj
++xLFU62VeTALixU5mPQKSgSICKfjev0FUUurF6wIDAQABAoIBAQCs11C/PM/iYNfl
++mSSAWAStMrWni/Wc6QhXC2422ZV8hMZ8XwEtjtqrR6UTkLXz8HHMsR/7Zy2X2gJA
++o1E2mS0ceoUiDxaA+RRL0W7Lq0j5qBsImZukkdLHG/iWRDJnjenhsParHsYUD6Lb
++ELFGw/safjyOI4quMGtsvSqisKAJL5ZCPD5JHLhnNP8HXT6icSZrsqGhunb2tsa+
++Ogcx1+bZzqdTsbvXdbw07Lnd/LRU0NDhjeEVl4J2yFNYY+OIj7/qrxSnZnGLLG0Y
++DFxiD+HCMvTBSooqvWI6FAipfyCGjUznGsVaRv7TuzHPuKE4LtbIC/Ac3Q10rKWq
++PmHALir5AoGBAOhGUCToWfYnj2zH0GIZQxnkrv9iRqmdGeCDX6ZM00Bs5tASnRo0
++o90UtLbhWjHe1PKRKFyD4I7a8iIWxcWWun2XHgOtItctPN+lbjpTHTyE2yA1iZhe
++dKCV3bAo4t+puKrPkZmaBqFD/fQx7DNxYdRERa1giiZGhlMUN3l7/S21AoGBAN5Y
++nZ68NkTgklk4YBzsxwsMpQbgbihyG79gtDFxWonxZUQ29EsL01yd30pJNhg1LxDN
++0fADfHVzkZ3qYz9knge9a75Yk8UBM3DM+xu+DRkjKhK5mPX5oLvj6061u3Scs6tj
++orpU/mV1amz5gqrkefMaelsdHRuGGZQVx9KTV2kfAoGBAN7EAL1E8nK4Qj/r6xkK
++bWZ6ArQABxFJELZYiPWvnLOfPka0c2PctIOmBiOXQa+urMDvIqyH9mhL6Al1mbwE
++8VreAfU4qb+BLW649FyPteyC5r2fWxV9EZGp6fG3ZM9psShw5o1QQaeM1BTNhGFa
++Dp9L0x+TBSvsW4t2SjYDCjA5AoGASzxxGWVWd7gFzWrmGuOD9pkwvkLzA3yZJwjx
++8EkK+eJVAeAWic5WluBUzi43v7k/U9BRWYXUd2nDvEuziZ/iWXwfGSmf1umxHlo+
++HgURKZBcjDmBKLpvSSS2WsvjwnHD2hq81ZAtBOfWO0myjWECYuByxqHzV3zo6tLz
++6q0wxsECgYA26twPrAoRqvfvPnNj6o0LrsE39Tj6jHIVijT7Lbcf2xVnaDiQ18PQ
++RC6Tgkz5KZf8GKfMRMA3WopGn9QE2luI4RLIbhLozEDrkk2L7wSYqI9DZ1Hd26wf
++v3+3jdpsXkzHwWYz1a2+FhCF5mJJRQl6kd/B0wu00vdfwviK9OVO7w==
++-----END RSA PRIVATE KEY-----
+diff --git a/test/parallel/test-https-foafssl.js b/test/parallel/test-https-foafssl.js
+index 4e1a8fbc4c..4305781704 100644
+--- a/test/parallel/test-https-foafssl.js
++++ b/test/parallel/test-https-foafssl.js
+@@ -33,21 +33,15 @@ const https = require('https');
+ const spawn = require('child_process').spawn;
+ 
+ const options = {
+-  key: fixtures.readSync('agent.key'),
+-  cert: fixtures.readSync('agent.crt'),
++  key: fixtures.readKey('rsa_private.pem'),
++  cert: fixtures.readKey('rsa_cert.crt'),
+   requestCert: true,
+   rejectUnauthorized: false
+ };
+ 
+-const modulus = 'A6F44A9C25791431214F5C87AF9E040177A8BB89AC803F7E09BBC3A5519F' +
+-                '349CD9B9C40BE436D0AA823A94147E26C89248ADA2BE3DD4D34E8C289646' +
+-                '94B2047D217B4F1299371EA93A83C89AB9440724131E65F2B0161DE9560C' +
+-                'DE9C13455552B2F49CF0FB00D8D77532324913F6F80FF29D0A131D29DB06' +
+-                'AFF8BE191B7920DC2DAE1C26EA82A47847A10391EF3BF6AABB3CC40FF821' +
+-                '00B03A4F0FF1809278E4DDFDA7DE954ED56DC7AD9A47EEBC37D771A366FC' +
+-                '60A5BCB72373BEC180649B3EFA0E9092707210B41B90032BB18BC91F2046' +
+-                'EBDAF1191F4A4E26D71879C4C7867B62FCD508E8CE66E82D128A71E91580' +
+-                '9FCF44E8DE774067F1DE5D70B9C03687';
++const webIdUrl = 'URI:http://example.com/#me';
++const modulus = fixtures.readKey('rsa_cert_foafssl_b.modulus', 'ascii').replace(/\n/g, '');
++const exponent = fixtures.readKey('rsa_cert_foafssl_b.exponent', 'ascii').replace(/\n/g, '');
+ 
+ const CRLF = '\r\n';
+ const body = 'hello world\n';
+@@ -58,8 +52,8 @@ const server = https.createServer(options, common.mustCall(function(req, res) {
+ 
+   cert = req.connection.getPeerCertificate();
+ 
+-  assert.strictEqual(cert.subjectaltname, 'URI:http://example.com/#me');
+-  assert.strictEqual(cert.exponent, '0x10001');
++  assert.strictEqual(cert.subjectaltname, webIdUrl);
++  assert.strictEqual(cert.exponent, exponent);
+   assert.strictEqual(cert.modulus, modulus);
+   res.writeHead(200, { 'content-type': 'text/plain' });
+   res.end(body);
+@@ -69,8 +63,8 @@ server.listen(0, function() {
+   const args = ['s_client',
+                 '-quiet',
+                 '-connect', `127.0.0.1:${this.address().port}`,
+-                '-cert', fixtures.path('foafssl.crt'),
+-                '-key', fixtures.path('foafssl.key')];
++                '-cert', fixtures.path('keys/rsa_cert_foafssl_b.crt'),
++                '-key', fixtures.path('keys/rsa_private_b.pem')];
+ 
+   const client = spawn(common.opensslCli, args);
+ 
+-- 
+2.25.1
+

@@ -1,0 +1,24 @@
+From c7c4fa15058a8a132aab3c8e579d2b076984878c Mon Sep 17 00:00:00 2001
+From: Sam Roberts <vieuxtech@gmail.com>
+Date: Thu, 19 Mar 2020 21:07:36 -0700
+Subject: [PATCH] test: close tls sock with some data
+
+In openssl-1.1.1e the client doesn't seem to like having the TLS
+connection shut down with no data sent, so send an empty string. A
+number of related issues showed up in the TLS1.3 port, so this is
+not entirely surprising.
+---
+ test/parallel/test-tls-session-cache.js | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/test/parallel/test-tls-session-cache.js
++++ b/test/parallel/test-tls-session-cache.js
+@@ -64,7 +64,7 @@
+         throw er;
+     });
+     ++requestCount;
+-    cleartext.end();
++    cleartext.end('');
+   });
+   server.on('newSession', function(id, data, cb) {
+     ++newSessionCount;

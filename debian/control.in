@@ -1,0 +1,111 @@
+Source: nodejs
+Section: javascript
+Priority: optional
+Maintainer: Debian Javascript Maintainers <pkg-javascript-devel@lists.alioth.debian.org>
+Uploaders: Jérémy Lal <kapouer@melix.org>,
+ Jonas Smedegaard <dr@jones.dk>
+Build-Depends: @cdbs@
+Build-Depends-Indep: node-js-yaml,
+ node-marked
+Standards-Version: 4.3.0
+Homepage: http://nodejs.org/
+Vcs-Browser: https://salsa.debian.org/js-team/nodejs/tree/master-10.x
+Vcs-Git: https://salsa.debian.org/js-team/nodejs.git -b master-10.x
+
+Package: libnode-dev
+Section: libdevel
+Architecture: amd64 arm64 armhf i386 kfreebsd-i386 kfreebsd-amd64 mips mips64el mips64r6el mipsel ppc64 ppc64el s390x
+Multi-Arch: same
+Depends: ${cdbs:Depends},
+ ${misc:Depends},
+ libnode64 (= ${binary:Version})
+Suggests: ${cdbs:Suggests}
+Breaks: ${cdbs:Breaks}
+Replaces: ${cdbs:Replaces}
+Conflicts: ${cdbs:Conflicts}
+Provides: ${cdbs:Provides}
+Description: evented I/O for V8 javascript (development files)
+ Node.js is a platform built on Chrome's JavaScript runtime for easily
+ building fast, scalable network applications. Node.js uses an
+ event-driven, non-blocking I/O model that makes it lightweight and
+ efficient, perfect for data-intensive real-time applications that run
+ across distributed devices.
+ .
+ This package provides development headers for libnode__ABI.
+
+Package: nodejs
+Architecture: amd64 arm64 armhf i386 kfreebsd-i386 kfreebsd-amd64 mips mips64el mips64r6el mipsel ppc64 ppc64el s390x
+Multi-Arch: foreign
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ libnode64 (= ${binary:Version})
+Provides: ${cdbs:Provides}
+Recommends: ${cdbs:Recommends},
+ nodejs-doc
+Suggests: npm
+Replaces: nodejs-legacy
+Conflicts: nodejs-legacy
+Description: evented I/O for V8 javascript - runtime executable
+ Node.js is a platform built on Chrome's JavaScript runtime for easily
+ building fast, scalable network applications. Node.js uses an
+ event-driven, non-blocking I/O model that makes it lightweight and
+ efficient, perfect for data-intensive real-time applications that run
+ across distributed devices.
+ .
+ Node.js is bundled with several useful libraries to handle server
+ tasks:
+ .
+ System, Events, Standard I/O, Modules, Timers, Child Processes, POSIX,
+ HTTP, Multipart Parsing, TCP, DNS, Assert, Path, URL, Query Strings.
+
+Package: libnode64
+Section: libs
+Architecture: amd64 arm64 armhf i386 kfreebsd-i386 kfreebsd-amd64 mips mips64el mips64r6el mipsel ppc64 ppc64el s390x
+Multi-Arch: same
+Depends: ${shlibs:Depends},
+ ${misc:Depends}
+Provides: ${cdbs:Provides}
+Recommends: ${cdbs:Recommends}
+Breaks: ${cdbs:Breaks}
+Replaces: nodejs-legacy
+Conflicts: nodejs-legacy
+Description: evented I/O for V8 javascript - runtime library
+ Node.js is a platform built on Chrome's JavaScript runtime for easily
+ building fast, scalable network applications. Node.js uses an
+ event-driven, non-blocking I/O model that makes it lightweight and
+ efficient, perfect for data-intensive real-time applications that run
+ across distributed devices.
+ .
+ Node.js is bundled with several useful libraries to handle server
+ tasks:
+ .
+ System, Events, Standard I/O, Modules, Timers, Child Processes, POSIX,
+ HTTP, Multipart Parsing, TCP, DNS, Assert, Path, URL, Query Strings.
+ .
+ This package provides the dynamic library for Node.js.
+
+Package: nodejs-doc
+Section: doc
+Architecture: all
+Multi-Arch: foreign
+Depends: ${misc:Depends}
+Provides: ${cdbs:Provides}
+Recommends: ${cdbs:Recommends}, nodejs
+Replaces: nodejs (<< 6.11.2~dfsg-3)
+Conflicts: nodejs (<< 6.11.2~dfsg-3)
+Description: API documentation for Node.js, the javascript platform
+ Node.js is a platform built on Chrome's JavaScript runtime for easily
+ building fast, scalable network applications. Node.js uses an
+ event-driven, non-blocking I/O model that makes it lightweight and
+ efficient, perfect for data-intensive real-time applications that run
+ across distributed devices.
+ .
+ Node.js is bundled with several useful libraries to handle server
+ tasks:
+ .
+ System, Events, Standard I/O, Modules, Timers, Child Processes, POSIX,
+ HTTP, Multipart Parsing, TCP, DNS, Assert, Path, URL, Query Strings.
+ .
+ This package contains API documentation for Node.js.
+

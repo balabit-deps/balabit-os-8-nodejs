@@ -1,0 +1,135 @@
+From 582c12260ed99ebe7710894c2dab29435b1bebdc Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Micha=C3=ABl=20Zasso?= <targos@protonmail.com>
+Date: Thu, 31 Jan 2019 08:36:48 +0100
+Subject: [PATCH] deps: update acorn to 6.0.7
+
+acorn and acorn-walk are now published as two different packages. Put
+them both in subdirectories of `deps/acorn`.
+Adapt the REPL's recoverable error detection to use the new API for
+extending acorn parsers.
+
+PR-URL: https://github.com/nodejs/node/pull/25844
+Reviewed-By: Ruben Bridgewater <ruben@bridgewater.de>
+---
+
+--- a/lib/assert.js
++++ b/lib/assert.js
+@@ -198,8 +198,8 @@
+ function parseCode(code, offset) {
+   // Lazy load acorn.
+   if (parseExpressionAt === undefined) {
+-    ({ parseExpressionAt } = require('internal/deps/acorn/dist/acorn'));
+-    ({ findNodeAround } = require('internal/deps/acorn/dist/walk'));
++    ({ parseExpressionAt } = require('internal/deps/acorn/acorn/dist/acorn'));
++    ({ findNodeAround } = require('internal/deps/acorn/acorn-walk/dist/walk'));
+   }
+   let node;
+   let start = 0;
+--- a/lib/internal/repl/await.js
++++ b/lib/internal/repl/await.js
+@@ -1,7 +1,7 @@
+ 'use strict';
+ 
+-const acorn = require('internal/deps/acorn/dist/acorn');
+-const walk = require('internal/deps/acorn/dist/walk');
++const acorn = require('internal/deps/acorn/acorn/dist/acorn');
++const walk = require('internal/deps/acorn/acorn-walk/dist/walk');
+ 
+ const noop = () => {};
+ const visitorsWithoutAncestors = {
+--- a/lib/internal/repl/recoverable.js
++++ b/lib/internal/repl/recoverable.js
+@@ -1,7 +1,7 @@
+ 'use strict';
+ 
+-const acorn = require('internal/deps/acorn/dist/acorn');
+-const { tokTypes: tt } = acorn;
++const acorn = require('internal/deps/acorn/acorn/dist/acorn');
++const { tokTypes: tt, Parser: AcornParser } = acorn;
+ 
+ // If the error is that we've unexpectedly ended the input,
+ // then let the user try to recover by adding more input.
+@@ -26,17 +26,13 @@
+   //       change these messages in the future, this will lead to a test
+   //       failure, indicating that this code needs to be updated.
+   //
+-  acorn.plugins.replRecoverable = (parser) => {
+-    parser.extend('nextToken', (nextToken) => {
+-      return function() {
+-        Reflect.apply(nextToken, this, []);
+-
++  const RecoverableParser = AcornParser.extend((Parser) => {
++    return class extends Parser {
++      nextToken() {
++        super.nextToken();
+         if (this.type === tt.eof) recoverable = true;
+-      };
+-    });
+-
+-    parser.extend('raise', (raise) => {
+-      return function(pos, message) {
++      }
++      raise(pos, message) {
+         switch (message) {
+           case 'Unterminated template':
+           case 'Unterminated comment':
+@@ -48,11 +44,10 @@
+             // see https://www.ecma-international.org/ecma-262/#sec-line-terminators
+             recoverable = /\\(?:\r\n?|\n|\u2028|\u2029)$/.test(token);
+         }
+-
+-        Reflect.apply(raise, this, [pos, message]);
+-      };
+-    });
+-  };
++        super.raise(pos, message);
++      }
++    };
++  });
+ 
+   // For similar reasons as `defaultEval`, wrap expressions starting with a
+   // curly brace with parenthesis.  Note: only the open parenthesis is added
+@@ -63,7 +58,7 @@
+   // Try to parse the code with acorn.  If the parse fails, ignore the acorn
+   // error and return the recoverable status.
+   try {
+-    acorn.parse(code, { plugins: { replRecoverable: true }, ecmaVersion: 10 });
++    RecoverableParser.parse(code, { ecmaVersion: 10 });
+ 
+     // Odd case: the underlying JS engine (V8, Chakra) rejected this input
+     // but Acorn detected no issue.  Presume that additional text won't
+--- a/lib/repl.js
++++ b/lib/repl.js
+@@ -50,7 +50,7 @@
+ const {
+   isIdentifierStart,
+   isIdentifierChar
+-} = require('internal/deps/acorn/dist/acorn');
++} = require('internal/deps/acorn/acorn/dist/acorn');
+ const internalUtil = require('internal/util');
+ const util = require('util');
+ const utilBinding = process.binding('util');
+--- a/node.gyp
++++ b/node.gyp
+@@ -199,8 +199,8 @@
+       'deps/node-inspect/lib/_inspect.js',
+       'deps/node-inspect/lib/internal/inspect_client.js',
+       'deps/node-inspect/lib/internal/inspect_repl.js',
+-      'deps/acorn/dist/acorn.js',
+-      'deps/acorn/dist/walk.js',
++      'deps/acorn/acorn/dist/acorn.js',
++      'deps/acorn/acorn-walk/dist/walk.js',
+     ],
+     'conditions': [
+       [ 'node_shared=="true"', {
+--- a/tools/doc/apilinks.js
++++ b/tools/doc/apilinks.js
+@@ -18,7 +18,7 @@
+ //    `function X(...) {...}`). Over time, we expect to handle more
+ //    cases (example: ES2015 class definitions).
+ 
+-const acorn = require('../../deps/acorn');
++const acorn = require('../../deps/acorn/acorn');
+ const fs = require('fs');
+ const path = require('path');
+ const child_process = require('child_process');

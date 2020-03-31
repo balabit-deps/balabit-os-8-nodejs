@@ -1,0 +1,7 @@
+# false positives
+source-is-missing test/fixtures/assert-long-line*
+source-is-missing deps/v8/benchmarks/regexp*
+source-is-missing test/fixtures/throws_error*
+# removed and restored as a patch, false positive
+source-is-missing doc/api_assets/sh_javascript.min.js
+

@@ -1,0 +1,1549 @@
+Description: build doc using marked and js-yaml
+ While waiting for unified/remarked/rehyped modules to be available in debian
+Forwarded: not-needed
+Last-Update: 2018-10-01
+Author: Jérémy Lal <kapouer@melix.org>
+--- a/Makefile
++++ b/Makefile
+@@ -334,14 +334,6 @@
+ 
+ node_use_openssl = $(call available-node,"-p" \
+ 		   "process.versions.openssl != undefined")
+-test/addons/.docbuildstamp: $(DOCBUILDSTAMP_PREREQS) tools/doc/node_modules
+-	@if [ "$(shell $(node_use_openssl))" != "true" ]; then \
+-		echo "Skipping .docbuildstamp (no crypto)"; \
+-	else \
+-		$(RM) -r test/addons/??_*/; \
+-		[ -x $(NODE) ] && $(NODE) $< || node $< ; \
+-		touch $@; \
+-	fi
+ 
+ ADDONS_BINDING_GYPS := \
+ 	$(filter-out test/addons/??_*/binding.gyp, \
+@@ -613,11 +605,6 @@
+ apiassets = $(subst api_assets,api/assets,$(addprefix out/,$(wildcard doc/api_assets/*)))
+ 
+ tools/doc/node_modules: tools/doc/package.json
+-	@if [ "$(shell $(node_use_openssl))" != "true" ]; then \
+-		echo "Skipping tools/doc/node_modules (no crypto)"; \
+-	else \
+-		cd tools/doc && $(call available-node,$(run-npm-ci)) \
+-	fi
+ 
+ .PHONY: doc-only
+ doc-only: tools/doc/node_modules \
+@@ -634,7 +621,10 @@
+ # Just copy everything under doc/api over.
+ out/doc/api: doc/api
+ 	mkdir -p $@
+-	cp -r doc/api out/doc
++	cp -r doc/api out/doc/
++	rm -f out/doc/api/*.html
++	rm -f out/doc/api/*.json
++
+ 
+ # If it's a source tarball, assets are already in doc/api/assets
+ out/doc/api/assets:
+@@ -648,20 +638,16 @@
+ 
+ run-npm-ci = $(PWD)/$(NPM) ci
+ 
+-LINK_DATA = out/doc/apilinks.json
+-gen-api = tools/doc/generate.js --node-version=$(FULLVERSION) \
+-		--apilinks=$(LINK_DATA) $< --output-directory=out/doc/api
+-gen-apilink = tools/doc/apilinks.js $(LINK_DATA) $(wildcard lib/*.js)
+-
+-$(LINK_DATA): $(wildcard lib/*.js) tools/doc/apilinks.js
+-	$(call available-node, $(gen-apilink))
+-
+-out/doc/api/%.json out/doc/api/%.html: doc/api/%.md tools/doc/generate.js \
+-	tools/doc/html.js tools/doc/json.js tools/doc/apilinks.js | $(LINK_DATA)
+-	$(call available-node, $(gen-api))
++gen-json = tools/doc/generate.js --format=json $< > $@
++gen-html = tools/doc/generate.js --node-version=$(FULLVERSION) --format=html $< > $@
++
++out/doc/api/%.json: doc/api/%.md tools/doc/generate.js tools/doc/json.js
++	$(call available-node, $(gen-json))
++
++out/doc/api/%.html: doc/api/%.md tools/doc/generate.js tools/doc/html.js
++	$(call available-node, $(gen-html))
+ 
+-out/doc/api/all.html: $(apidocs_html) tools/doc/allhtml.js \
+-	tools/doc/apilinks.js
++out/doc/api/all.html: $(apidocs_html) tools/doc/allhtml.js
+ 	$(call available-node, tools/doc/allhtml.js)
+ 
+ out/doc/api/all.json: $(apidocs_json) tools/doc/alljson.js
+--- a/tools/doc/addon-verify.js
++++ b/tools/doc/addon-verify.js
+@@ -1,38 +1,28 @@
+ 'use strict';
+ 
+-// doc/api/addons.md has a bunch of code.  Extract it for verification
+-// that the C++ code compiles and the js code runs.
+-// Add .gyp files which will be used to compile the C++ code.
+-// Modify the require paths in the js code to pull from the build tree.
+-// Triggered from the build-addons target in the Makefile and vcbuild.bat.
+-
+-const { mkdir, writeFile } = require('fs');
++const { mkdir, readFileSync, writeFile } = require('fs');
+ const { resolve } = require('path');
+-const vfile = require('to-vfile');
+-const unified = require('unified');
+-const remarkParse = require('remark-parse');
++const { lexer } = require('marked');
+ 
+ const rootDir = resolve(__dirname, '..', '..');
+ const doc = resolve(rootDir, 'doc', 'api', 'addons.md');
+ const verifyDir = resolve(rootDir, 'test', 'addons');
+ 
+-const file = vfile.readSync(doc, 'utf8');
+-const tree = unified().use(remarkParse).parse(file);
++const tokens = lexer(readFileSync(doc, 'utf8'));
+ const addons = {};
+ let id = 0;
+ let currentHeader;
+ 
+ const validNames = /^\/\/\s+(.*\.(?:cc|h|js))[\r\n]/;
+-tree.children.forEach((node) => {
+-  if (node.type === 'heading') {
+-    currentHeader = file.contents.slice(
+-      node.children[0].position.start.offset,
+-      node.position.end.offset);
++tokens.forEach(({ type, text }) => {
++  if (type === 'heading') {
++    currentHeader = text;
+     addons[currentHeader] = { files: {} };
+-  } else if (node.type === 'code') {
+-    const match = node.value.match(validNames);
++  }
++  if (type === 'code') {
++    const match = text.match(validNames);
+     if (match !== null) {
+-      addons[currentHeader].files[match[1]] = node.value;
++      addons[currentHeader].files[match[1]] = text;
+     }
+   }
+ });
+--- a/tools/doc/common.js
++++ b/tools/doc/common.js
+@@ -1,7 +1,7 @@
+ 'use strict';
+ 
+ const yaml =
+-  require(`${__dirname}/../node_modules/eslint/node_modules/js-yaml`);
++  require('js-yaml');
+ 
+ function isYAMLBlock(text) {
+   return /^<!-- YAML/.test(text);
+@@ -34,10 +34,6 @@
+     meta.deprecated = arrify(meta.deprecated);
+   }
+ 
+-  if (meta.removed) {
+-    meta.removed = arrify(meta.removed);
+-  }
+-
+   meta.changes = meta.changes || [];
+ 
+   return meta;
+--- a/tools/doc/generate.js
++++ b/tools/doc/generate.js
+@@ -22,39 +22,22 @@
+ 'use strict';
+ 
+ const fs = require('fs');
+-const path = require('path');
+-const unified = require('unified');
+-const markdown = require('remark-parse');
+-const remark2rehype = require('remark-rehype');
+-const raw = require('rehype-raw');
+-const htmlStringify = require('rehype-stringify');
+-
+-const html = require('./html');
+-const json = require('./json');
+ 
+ // Parse the args.
+ // Don't use nopt or whatever for this. It's simple enough.
+ 
+ const args = process.argv.slice(2);
+ let filename = null;
++let format = 'json';
+ let nodeVersion = null;
+-let outputDir = null;
+-let apilinks = {};
+ 
+ args.forEach(function(arg) {
+   if (!arg.startsWith('--')) {
+     filename = arg;
+   } else if (arg.startsWith('--node-version=')) {
+     nodeVersion = arg.replace(/^--node-version=/, '');
+-  } else if (arg.startsWith('--output-directory=')) {
+-    outputDir = arg.replace(/^--output-directory=/, '');
+-  } else if (arg.startsWith('--apilinks=')) {
+-    const linkFile = arg.replace(/^--apilinks=/, '');
+-    const data = fs.readFileSync(linkFile, 'utf8');
+-    if (!data.trim()) {
+-      throw new Error(`${linkFile} is empty`);
+-    }
+-    apilinks = JSON.parse(data);
++  } else if (arg.startsWith('--format=')) {
++    format = arg.replace(/^--format=/, '');
+   }
+ });
+ 
+@@ -62,37 +45,28 @@
+ 
+ if (!filename) {
+   throw new Error('No input file specified');
+-} else if (!outputDir) {
+-  throw new Error('No output directory specified');
+ }
+ 
+ 
+ fs.readFile(filename, 'utf8', (er, input) => {
+   if (er) throw er;
+ 
+-  const content = unified()
+-    .use(markdown)
+-    .use(html.preprocessText)
+-    .use(json.jsonAPI, { filename })
+-    .use(html.firstHeader)
+-    .use(html.preprocessElements, { filename })
+-    .use(html.buildToc, { filename, apilinks })
+-    .use(remark2rehype, { allowDangerousHTML: true })
+-    .use(raw)
+-    .use(htmlStringify)
+-    .processSync(input);
+-
+-  const basename = path.basename(filename, '.md');
+-
+-  html.toHTML(
+-    { input, content, filename, nodeVersion },
+-    (err, html) => {
+-      const target = path.join(outputDir, `${basename}.html`);
+-      if (err) throw err;
+-      fs.writeFileSync(target, html);
+-    }
+-  );
+-
+-  const target = path.join(outputDir, `${basename}.json`);
+-  fs.writeFileSync(target, JSON.stringify(content.json, null, 2));
++  switch (format) {
++    case 'json':
++      require('./json.js')(input, filename, (er, obj) => {
++        if (er) throw er;
++        console.log(JSON.stringify(obj, null, 2));
++      });
++      break;
++
++    case 'html':
++      require('./html')({ input, filename, nodeVersion },
++                        (err, html) => {
++                          if (err) throw err;
++                          console.log(html);
++                        });
++      break;
++    default:
++      throw new Error(`Invalid format: ${format}`);
++  }
+ });
+--- a/tools/doc/html.js
++++ b/tools/doc/html.js
+@@ -23,59 +23,57 @@
+ 
+ const common = require('./common.js');
+ const fs = require('fs');
+-const unified = require('unified');
+-const find = require('unist-util-find');
+-const visit = require('unist-util-visit');
+-const markdown = require('remark-parse');
+-const remark2rehype = require('remark-rehype');
+-const raw = require('rehype-raw');
+-const htmlStringify = require('rehype-stringify');
++const marked = require('marked');
+ const path = require('path');
+ const typeParser = require('./type-parser.js');
+ 
+-module.exports = {
+-  toHTML, firstHeader, preprocessText, preprocessElements, buildToc
+-};
++module.exports = toHTML;
+ 
+-const docPath = path.resolve(__dirname, '..', '..', 'doc');
++// Make `marked` to not automatically insert id attributes in headings.
++const renderer = new marked.Renderer();
++renderer.heading = (text, level) => `<h${level}>${text}</h${level}>\n`;
++marked.setOptions({ renderer });
+ 
+-// Add class attributes to index navigation links.
+-function navClasses() {
+-  return (tree) => {
+-    visit(tree, { type: 'element', tagName: 'a' }, (node) => {
+-      node.properties.class = 'nav-' +
+-        node.properties.href.replace('.html', '').replace(/\W+/g, '-');
+-    });
+-  };
+-}
++
++const docPath = path.resolve(__dirname, '..', '..', 'doc');
+ 
+ const gtocPath = path.join(docPath, 'api', 'index.md');
+ const gtocMD = fs.readFileSync(gtocPath, 'utf8').replace(/^<!--.*?-->/gms, '');
+-const gtocHTML = unified()
+-  .use(markdown)
+-  .use(remark2rehype, { allowDangerousHTML: true })
+-  .use(raw)
+-  .use(navClasses)
+-  .use(htmlStringify)
+-  .processSync(gtocMD).toString();
++const gtocHTML = marked(gtocMD).replace(
++  /<a href="(.*?)"/g,
++  (all, href) => `<a class="nav-${href.replace('.html', '')
++                                      .replace(/\W+/g, '-')}" href="${href}"`
++);
++
+ 
+ const templatePath = path.join(docPath, 'template.html');
+ const template = fs.readFileSync(templatePath, 'utf8');
+ 
+-function toHTML({ input, content, filename, nodeVersion }, cb) {
++function toHTML({ input, filename, nodeVersion }, cb) {
+   filename = path.basename(filename, '.md');
+ 
++  const lexed = marked.lexer(input);
++
++  const firstHeading = lexed.find(({ type }) => type === 'heading');
++  const section = firstHeading ? firstHeading.text : 'Index';
++
++  preprocessText(lexed);
++  preprocessElements(lexed, filename);
++
++  // Generate the table of contents. This mutates the lexed contents in-place.
++  const toc = buildToc(lexed, filename);
++  let content = "";
++
++
+   const id = filename.replace(/\W+/g, '-');
+ 
+   let HTML = template.replace('__ID__', id)
+                      .replace(/__FILENAME__/g, filename)
+-                     .replace('__SECTION__', content.section)
++                     .replace('__SECTION__', section)
+                      .replace(/__VERSION__/g, nodeVersion)
+-                     .replace('__TOC__', content.toc)
++                     .replace('__TOC__', toc)
+                      .replace('__GTOC__', gtocHTML.replace(
+-                       `class="nav-${id}`, `class="nav-${id} active`))
+-                     .replace('__EDIT_ON_GITHUB__', editOnGitHub(filename))
+-                     .replace('__CONTENT__', content.toString());
++                       `class="nav-${id}`, `class="nav-${id} active`));
+ 
+   const docCreated = input.match(
+     /<!--\s*introduced_in\s*=\s*v([0-9]+)\.([0-9]+)\.[0-9]+\s*-->/);
+@@ -86,36 +84,39 @@
+     HTML = HTML.replace('__ALTDOCS__', '');
+   }
+ 
+-  cb(null, HTML);
+-}
++  HTML = HTML.replace('__EDIT_ON_GITHUB__', editOnGitHub(filename));
+ 
+-// Set the section name based on the first header.  Default to 'Index'.
+-function firstHeader() {
+-  return (tree, file) => {
+-    file.section = 'Index';
+-
+-    const heading = find(tree, { type: 'heading' });
+-    if (heading) {
+-      const text = find(heading, { type: 'text' });
+-      if (text) file.section = text.value;
+-    }
+-  };
++  // Content insertion has to be the last thing we do with the lexed tokens,
++  // because it's destructive.
++  HTML = HTML.replace('__CONTENT__', marked.parser(lexed));
++
++  cb(null, HTML);
+ }
+ 
+ // Handle general body-text replacements.
+ // For example, link man page references to the actual page.
+-function preprocessText() {
+-  return (tree) => {
+-    visit(tree, null, (node) => {
+-      if (node.type === 'text' && node.value) {
+-        const value = linkJsTypeDocs(linkManPages(node.value));
+-        if (value !== node.value) {
+-          node.type = 'html';
+-          node.value = value;
+-        }
++function preprocessText(lexed) {
++  lexed.forEach((token) => {
++    if (token.type === 'table') {
++      if (token.header) {
++        token.header = token.header.map(replaceInText);
+       }
+-    });
+-  };
++
++      if (token.cells) {
++        token.cells.forEach((row, i) => {
++          token.cells[i] = row.map(replaceInText);
++        });
++      }
++    } else if (token.text && token.type !== 'code') {
++      token.text = replaceInText(token.text);
++    }
++  });
++}
++
++// Replace placeholders in text tokens.
++function replaceInText(text) {
++  if (text === '') return text;
++  return linkJsTypeDocs(linkManPages(text));
+ }
+ 
+ // Syscalls which appear in the docs, but which only exist in BSD / macOS.
+@@ -159,76 +160,66 @@
+   return parts.join('`');
+ }
+ 
+-// Preprocess headers, stability blockquotes, and YAML blocks.
+-function preprocessElements({ filename }) {
+-  return (tree) => {
+-    const STABILITY_RE = /(.*:)\s*(\d)([\s\S]*)/;
+-    let headingIndex = -1;
+-    let heading = null;
+-
+-    visit(tree, null, (node, index) => {
+-      if (node.type === 'heading') {
+-        headingIndex = index;
+-        heading = node;
+-      } else if (node.type === 'html' && common.isYAMLBlock(node.value)) {
+-        node.value = parseYAML(node.value);
+-
+-      } else if (node.type === 'blockquote') {
+-        const paragraph = node.children[0].type === 'paragraph' &&
+-          node.children[0];
+-        const text = paragraph && paragraph.children[0].type === 'text' &&
+-          paragraph.children[0];
+-        if (text && text.value.includes('Stability:')) {
+-          const [, prefix, number, explication] =
+-            text.value.match(STABILITY_RE);
+-
+-          const isStabilityIndex =
+-            index - 2 === headingIndex || // General.
+-            index - 3 === headingIndex;   // With api_metadata block.
+-
+-          if (heading && isStabilityIndex) {
+-            heading.stability = number;
+-            headingIndex = -1;
+-            heading = null;
+-          }
+-
+-          // Do not link to the section we are already in.
+-          const noLinking = filename.includes('documentation') &&
+-            heading !== null && heading.children[0].value === 'Stability Index';
+-
+-          // collapse blockquote and paragraph into a single node
+-          node.type = 'paragraph';
+-          node.children.shift();
+-          node.children.unshift(...paragraph.children);
+-
+-          // insert div with prefix and number
+-          node.children.unshift({
+-            type: 'html',
+-            value: `<div class="api_stability api_stability_${number}">` +
+-              (noLinking ? '' :
+-                '<a href="documentation.html#documentation_stability_index">') +
+-              `${prefix} ${number}${noLinking ? '' : '</a>'}`
+-                .replace(/\n/g, ' ')
+-          });
+-
+-          // remove prefix and number from text
+-          text.value = explication;
+-
+-          // close div
+-          node.children.push({ type: 'html', value: '</div>' });
++// Preprocess stability blockquotes and YAML blocks.
++function preprocessElements(lexed, filename) {
++  const STABILITY_RE = /(.*:)\s*(\d)([\s\S]*)/;
++  let state = null;
++  let headingIndex = -1;
++  let heading = null;
++
++  lexed.forEach((token, index) => {
++    if (token.type === 'heading') {
++      headingIndex = index;
++      heading = token;
++    }
++    if (token.type === 'html' && common.isYAMLBlock(token.text)) {
++      token.text = parseYAML(token.text);
++    }
++    if (token.type === 'blockquote_start') {
++      state = 'MAYBE_STABILITY_BQ';
++      lexed[index] = { type: 'space' };
++    }
++    if (token.type === 'blockquote_end' && state === 'MAYBE_STABILITY_BQ') {
++      state = null;
++      lexed[index] = { type: 'space' };
++    }
++    if (token.type === 'paragraph' && state === 'MAYBE_STABILITY_BQ') {
++      if (token.text.includes('Stability:')) {
++        const [, prefix, number, explication] = token.text.match(STABILITY_RE);
++        const isStabilityIndex =
++          index - 2 === headingIndex || // General.
++          index - 3 === headingIndex;   // With api_metadata block.
++
++        if (heading && isStabilityIndex) {
++          heading.stability = number;
++          headingIndex = -1;
++          heading = null;
+         }
++
++        // Do not link to the section we are already in.
++        const noLinking = filename === 'documentation' &&
++          heading !== null && heading.text === 'Stability Index';
++        token.text = `<div class="api_stability api_stability_${number}">` +
++          (noLinking ? '' :
++            '<a href="documentation.html#documentation_stability_index">') +
++          `${prefix} ${number}${noLinking ? '' : '</a>'}${explication}</div>`
++          .replace(/\n/g, ' ');
++
++        lexed[index] = { type: 'html', text: token.text };
++      } else if (state === 'MAYBE_STABILITY_BQ') {
++        state = null;
++        lexed[index - 1] = { type: 'blockquote_start' };
+       }
+-    });
+-  };
++    }
++  });
+ }
+ 
+ function parseYAML(text) {
+   const meta = common.extractAndParseYAML(text);
+-  let result = '<div class="api_metadata">\n';
++  let html = '<div class="api_metadata">\n';
+ 
+   const added = { description: '' };
+   const deprecated = { description: '' };
+-  const removed = { description: '' };
+ 
+   if (meta.added) {
+     added.version = meta.added.join(', ');
+@@ -241,47 +232,32 @@
+         `<span>Deprecated since: ${deprecated.version}</span>`;
+   }
+ 
+-  if (meta.removed) {
+-    removed.version = meta.removed.join(', ');
+-    removed.description = `<span>Removed in: ${removed.version}</span>`;
+-  }
+-
+   if (meta.changes.length > 0) {
+     if (added.description) meta.changes.push(added);
+     if (deprecated.description) meta.changes.push(deprecated);
+-    if (removed.description) meta.changes.push(removed);
+ 
+     meta.changes.sort((a, b) => versionSort(a.version, b.version));
+ 
+-    result += '<details class="changelog"><summary>History</summary>\n' +
++    html += '<details class="changelog"><summary>History</summary>\n' +
+             '<table>\n<tr><th>Version</th><th>Changes</th></tr>\n';
+ 
+     meta.changes.forEach((change) => {
+-      const description = unified()
+-        .use(markdown)
+-        .use(remark2rehype, { allowDangerousHTML: true })
+-        .use(raw)
+-        .use(htmlStringify)
+-        .processSync(change.description).toString();
+-
+       const version = common.arrify(change.version).join(', ');
+-
+-      result += `<tr><td>${version}</td>\n` +
+-                  `<td>${description}</td></tr>\n`;
++      html += `<tr><td>${version}</td>\n` +
++                  `<td>${marked(change.description)}</td></tr>\n`;
+     });
+ 
+-    result += '</table>\n</details>\n';
++    html += '</table>\n</details>\n';
+   } else {
+-    result += `${added.description}${deprecated.description}` +
+-              `${removed.description}\n`;
++    html += `${added.description}${deprecated.description}\n`;
+   }
+ 
+   if (meta.napiVersion) {
+-    result += `<span>N-API version: ${meta.napiVersion.join(', ')}</span>\n`;
++    html += `<span>N-API version: ${meta.napiVersion.join(', ')}</span>\n`;
+   }
+ 
+-  result += '</div>';
+-  return result;
++  html += '</div>';
++  return html;
+ }
+ 
+ function minVersion(a) {
+@@ -301,68 +277,48 @@
+   return +b.match(numberRe)[0] - +a.match(numberRe)[0];
+ }
+ 
+-function buildToc({ filename, apilinks }) {
+-  return (tree, file) => {
+-    const startIncludeRefRE = /^\s*<!-- \[start-include:(.+)\] -->\s*$/;
+-    const endIncludeRefRE = /^\s*<!-- \[end-include:.+\] -->\s*$/;
+-    const realFilenames = [filename];
+-    const idCounters = Object.create(null);
+-    let toc = '';
+-    let depth = 0;
+-
+-    visit(tree, null, (node) => {
+-      // Keep track of the current filename for comment wrappers of inclusions.
+-      if (node.type === 'html') {
+-        const [, includedFileName] = node.value.match(startIncludeRefRE) || [];
+-        if (includedFileName !== undefined)
+-          realFilenames.unshift(includedFileName);
+-        else if (endIncludeRefRE.test(node.value))
+-          realFilenames.shift();
+-      }
+-
+-      if (node.type !== 'heading') return;
+-
+-      if (node.depth - depth > 1) {
+-        throw new Error(
+-          `Inappropriate heading level:\n${JSON.stringify(node)}`
+-        );
+-      }
++function buildToc(lexed, filename) {
++  const startIncludeRefRE = /^\s*<!-- \[start-include:(.+)\] -->\s*$/;
++  const endIncludeRefRE = /^\s*<!-- \[end-include:.+\] -->\s*$/;
++  const realFilenames = [filename];
++  const idCounters = Object.create(null);
++  let toc = '';
++  let depth = 0;
++
++  lexed.forEach((token) => {
++    // Keep track of the current filename along comment wrappers of inclusions.
++    if (token.type === 'html') {
++      const [, includedFileName] = token.text.match(startIncludeRefRE) || [];
++      if (includedFileName !== undefined)
++        realFilenames.unshift(includedFileName);
++      else if (endIncludeRefRE.test(token.text))
++        realFilenames.shift();
++    }
+ 
+-      depth = node.depth;
+-      const realFilename = path.basename(realFilenames[0], '.md');
+-      const headingText = file.contents.slice(
+-        node.children[0].position.start.offset,
+-        node.position.end.offset).trim();
+-      const id = getId(`${realFilename}_${headingText}`, idCounters);
+-
+-      const hasStability = node.stability !== undefined;
+-      toc += ' '.repeat((depth - 1) * 2) +
+-        (hasStability ? `* <span class="stability_${node.stability}">` : '* ') +
+-        `<a href="#${id}">${headingText}</a>${hasStability ? '</span>' : ''}\n`;
+-
+-      let anchor =
+-         `<span><a class="mark" href="#${id}" id="${id}">#</a></span>`;
+-
+-      if (realFilename === 'errors' && headingText.startsWith('ERR_')) {
+-        anchor += `<span><a class="mark" href="#${headingText}" ` +
+-                  `id="${headingText}">#</a></span>`;
+-      }
++    if (token.type !== 'heading') return;
+ 
+-      const api = headingText.replace(/^.*:\s+/, '').replace(/\(.*/, '');
+-      if (apilinks[api]) {
+-        anchor = `<a class="srclink" href=${apilinks[api]}>[src]</a>${anchor}`;
+-      }
++    if (token.depth - depth > 1) {
++      throw new Error(`Inappropriate heading level:\n${JSON.stringify(token)}`);
++    }
+ 
+-      node.children.push({ type: 'html', value: anchor });
+-    });
++    depth = token.depth;
++    const realFilename = path.basename(realFilenames[0], '.md');
++    const headingText = token.text.trim();
++    const id = getId(`${realFilename}_${headingText}`, idCounters);
++
++    const hasStability = token.stability !== undefined;
++    toc += ' '.repeat((depth - 1) * 2) +
++      (hasStability ? `* <span class="stability_${token.stability}">` : '* ') +
++      `<a href="#${id}">${token.text}</a>${hasStability ? '</span>' : ''}\n`;
++
++    token.text += `<span><a class="mark" href="#${id}" id="${id}">#</a></span>`;
++    if (realFilename === 'errors' && headingText.startsWith('ERR_')) {
++      token.text += `<span><a class="mark" href="#${headingText}" ` +
++                                             `id="${headingText}">#</a></span>`;
++    }
++  });
+ 
+-    file.toc = unified()
+-      .use(markdown)
+-      .use(remark2rehype, { allowDangerousHTML: true })
+-      .use(raw)
+-      .use(htmlStringify)
+-      .processSync(toc).toString();
+-  };
++  return marked(toc);
+ }
+ 
+ const notAlphaNumerics = /[^a-z0-9]+/g;
+--- a/tools/doc/json.js
++++ b/tools/doc/json.js
+@@ -21,267 +21,304 @@
+ 
+ 'use strict';
+ 
+-const unified = require('unified');
+-const common = require('./common.js');
+-const html = require('remark-html');
+-const select = require('unist-util-select');
++module.exports = doJSON;
+ 
+-module.exports = { jsonAPI };
++// Take the lexed input, and return a JSON-encoded object.
++// A module looks like this: https://gist.github.com/1777387.
+ 
+-// Unified processor: input is https://github.com/syntax-tree/mdast,
+-// output is: https://gist.github.com/1777387.
+-function jsonAPI({ filename }) {
+-  return (tree, file) => {
+-
+-    const exampleHeading = /^example/i;
+-    const metaExpr = /<!--([^=]+)=([^-]+)-->\n*/g;
+-    const stabilityExpr = /^Stability: ([0-5])(?:\s*-\s*)?(.*)$/s;
+-
+-    // Extract definitions.
+-    const definitions = select(tree, 'definition');
+-
+-    // Determine the start, stop, and depth of each section.
+-    const sections = [];
+-    let section = null;
+-    tree.children.forEach((node, i) => {
+-      if (node.type === 'heading' &&
+-          !exampleHeading.test(textJoin(node.children, file))) {
+-        if (section) section.stop = i - 1;
+-        section = { start: i, stop: tree.children.length, depth: node.depth };
+-        sections.push(section);
+-      }
+-    });
++const common = require('./common.js');
++const marked = require('marked');
+ 
+-    // Collect and capture results.
+-    const result = { type: 'module', source: filename };
+-    while (sections.length > 0) {
+-      doSection(sections.shift(), result);
+-    }
+-    file.json = result;
+-
+-    // Process a single section (recursively, including subsections).
+-    function doSection(section, parent) {
+-      if (section.depth - parent.depth > 1) {
+-        throw new Error('Inappropriate heading level\n' +
+-                        JSON.stringify(section));
+-      }
++// Customized heading without id attribute.
++const renderer = new marked.Renderer();
++renderer.heading = (text, level) => `<h${level}>${text}</h${level}>\n`;
++marked.setOptions({ renderer });
++
++
++function doJSON(input, filename, cb) {
++  const root = { source: filename };
++  const stack = [root];
++  let depth = 0;
++  let current = root;
++  let state = null;
++
++  const exampleHeading = /^example/i;
++  const metaExpr = /<!--([^=]+)=([^-]+)-->\n*/g;
++  const stabilityExpr = /^Stability: ([0-5])(?:\s*-\s*)?(.*)$/s;
++
++  const lexed = marked.lexer(input);
++  lexed.forEach((tok) => {
++    const { type } = tok;
++    let { text } = tok;
++
++    // <!-- name=module -->
++    // This is for cases where the markdown semantic structure is lacking.
++    if (type === 'paragraph' || type === 'html') {
++      text = text.replace(metaExpr, (_0, key, value) => {
++        current[key.trim()] = value.trim();
++        return '';
++      });
++      text = text.trim();
++      if (!text) return;
++    }
+ 
+-      const current = newSection(tree.children[section.start], file);
+-      let nodes = tree.children.slice(section.start + 1, section.stop + 1);
++    if (type === 'heading' && !exampleHeading.test(text.trim())) {
++      if (tok.depth - depth > 1) {
++        return cb(
++          new Error(`Inappropriate heading level\n${JSON.stringify(tok)}`));
++      }
+ 
+       // Sometimes we have two headings with a single blob of description.
+       // Treat as a clone.
+-      if (
+-        nodes.length === 0 && sections.length > 0 &&
+-        section.depth === sections[0].depth
+-      ) {
+-        nodes = tree.children.slice(sections[0].start + 1,
+-                                    sections[0].stop + 1);
+-      }
+-
+-      // Extract (and remove) metadata that is not directly inferable
+-      // from the markdown itself.
+-      nodes.forEach((node, i) => {
+-        // Input: <!-- name=module -->; output: {name: module}.
+-        if (node.type === 'html') {
+-          node.value = node.value.replace(metaExpr, (_0, key, value) => {
+-            current[key.trim()] = value.trim();
+-            return '';
+-          });
+-          if (!node.value.trim()) delete nodes[i];
++      if (state === 'AFTERHEADING' && depth === tok.depth) {
++        const clone = current;
++        current = newSection(tok);
++        current.clone = clone;
++        // Don't keep it around on the stack.
++        stack.pop();
++      } else {
++        // If the level is greater than the current depth,
++        // then it's a child, so we should just leave the stack as it is.
++        // However, if it's a sibling or higher, then it implies
++        // the closure of the other sections that came before.
++        // root is always considered the level=0 section,
++        // and the lowest heading is 1, so this should always
++        // result in having a valid parent node.
++        let closingDepth = tok.depth;
++        while (closingDepth <= depth) {
++          finishSection(stack.pop(), stack[stack.length - 1]);
++          closingDepth++;
+         }
++        current = newSection(tok);
++      }
+ 
+-        // Process metadata:
+-        // <!-- YAML
+-        // added: v1.0.0
+-        // -->
+-        if (node.type === 'html' && common.isYAMLBlock(node.value)) {
+-          current.meta = common.extractAndParseYAML(node.value);
+-          delete nodes[i];
+-        }
++      ({ depth } = tok);
++      stack.push(current);
++      state = 'AFTERHEADING';
++      return;
++    }
+ 
+-        // Stability marker: > Stability: ...
+-        if (
+-          node.type === 'blockquote' && node.children.length === 1 &&
+-          node.children[0].type === 'paragraph' &&
+-          nodes.slice(0, i).every((node) => node.type === 'list')
+-        ) {
+-          const text = textJoin(node.children[0].children, file);
+-          const stability = text.match(stabilityExpr);
+-          if (stability) {
+-            current.stability = parseInt(stability[1], 10);
+-            current.stabilityText = stability[2].trim();
+-            delete nodes[i];
+-          }
++    // Immediately after a heading, we can expect the following:
++    //
++    // { type: 'blockquote_start' },
++    // { type: 'paragraph', text: 'Stability: ...' },
++    // { type: 'blockquote_end' },
++    //
++    // A list: starting with list_start, ending with list_end,
++    // maybe containing other nested lists in each item.
++    //
++    // A metadata:
++    // <!-- YAML
++    // added: v1.0.0
++    // -->
++    //
++    // If one of these isn't found, then anything that comes
++    // between here and the next heading should be parsed as the desc.
++    if (state === 'AFTERHEADING') {
++      if (type === 'blockquote_start') {
++        state = 'AFTERHEADING_BLOCKQUOTE';
++        return;
++      } else if (type === 'list_start' && !tok.ordered) {
++        state = 'AFTERHEADING_LIST';
++        current.list = current.list || [];
++        current.list.push(tok);
++        current.list.level = 1;
++      } else if (type === 'html' && common.isYAMLBlock(tok.text)) {
++        current.meta = common.extractAndParseYAML(tok.text);
++      } else {
++        current.desc = current.desc || [];
++        if (!Array.isArray(current.desc)) {
++          current.shortDesc = current.desc;
++          current.desc = [];
+         }
+-      });
+-
+-      // Compress the node array.
+-      nodes = nodes.filter(() => true);
++        current.desc.links = lexed.links;
++        current.desc.push(tok);
++        state = 'DESC';
++      }
++      return;
++    }
+ 
+-      // If the first node is a list, extract it.
+-      const list = nodes[0] && nodes[0].type === 'list' ?
+-        nodes.shift() : null;
+-
+-      // Now figure out what this list actually means.
+-      // Depending on the section type, the list could be different things.
+-      const values = list ?
+-        list.children.map((child) => parseListItem(child, file)) : [];
+-
+-      switch (current.type) {
+-        case 'ctor':
+-        case 'classMethod':
+-        case 'method':
+-          // Each item is an argument, unless the name is 'return',
+-          // in which case it's the return value.
+-          const sig = {};
+-          sig.params = values.filter((value) => {
+-            if (value.name === 'return') {
+-              sig.return = value;
+-              return false;
+-            }
+-            return true;
+-          });
+-          parseSignature(current.textRaw, sig);
+-          current.signatures = [sig];
+-          break;
+-
+-        case 'property':
+-          // There should be only one item, which is the value.
+-          // Copy the data up to the section.
+-          if (values.length) {
+-            const signature = values[0];
+-
+-            // Shove the name in there for properties,
+-            // since they are always just going to be the value etc.
+-            signature.textRaw = `\`${current.name}\` ${signature.textRaw}`;
+-
+-            for (const key in signature) {
+-              if (signature[key]) {
+-                if (key === 'type') {
+-                  current.typeof = signature.type;
+-                } else {
+-                  current[key] = signature[key];
+-                }
+-              }
+-            }
+-          }
+-          break;
++    if (state === 'AFTERHEADING_LIST') {
++      current.list.push(tok);
++      if (type === 'list_start') {
++        current.list.level++;
++      } else if (type === 'list_end') {
++        current.list.level--;
++      }
++      if (current.list.level === 0) {
++        state = 'AFTERHEADING';
++        processList(current);
++      }
++      return;
++    }
+ 
+-        case 'event':
+-          // Event: each item is an argument.
+-          current.params = values;
+-          break;
++    if (state === 'AFTERHEADING_BLOCKQUOTE') {
++      if (type === 'blockquote_end') {
++        state = 'AFTERHEADING';
++        return;
++      }
+ 
+-        default:
+-          // If list wasn't consumed, put it back in the nodes list.
+-          if (list) nodes.unshift(list);
++      let stability;
++      if (type === 'paragraph' && (stability = text.match(stabilityExpr))) {
++        current.stability = parseInt(stability[1], 10);
++        current.stabilityText = stability[2].trim();
++        return;
+       }
++    }
++
++    current.desc = current.desc || [];
++    current.desc.links = lexed.links;
++    current.desc.push(tok);
++  });
++
++  // Finish any sections left open.
++  while (root !== (current = stack.pop())) {
++    finishSection(current, stack[stack.length - 1]);
++  }
++
++  return cb(null, root);
++}
++
+ 
+-      // Convert remaining nodes to a 'desc'.
+-      // Unified expects to process a string; but we ignore that as we
+-      // already have pre-parsed input that we can inject.
+-      if (nodes.length) {
+-        if (current.desc) current.shortDesc = current.desc;
+-
+-        current.desc = unified()
+-          .use(function() {
+-            this.Parser = () => (
+-              { type: 'root', children: nodes.concat(definitions) }
+-            );
+-          })
+-          .use(html)
+-          .processSync('').toString().trim();
+-        if (!current.desc) delete current.desc;
+-      }
+-
+-      // Process subsections.
+-      while (sections.length > 0 && sections[0].depth > section.depth) {
+-        doSection(sections.shift(), current);
+-      }
+-
+-      // If type is not set, default type based on parent type, and
+-      // set displayName and name properties.
+-      if (!current.type) {
+-        current.type = (parent.type === 'misc' ? 'misc' : 'module');
+-        current.displayName = current.name;
+-        current.name = current.name.toLowerCase()
+-          .trim().replace(/\s+/g, '_');
+-      }
+-
+-      // Pluralize type to determine which 'bucket' to put this section in.
+-      let plur;
+-      if (current.type.slice(-1) === 's') {
+-        plur = `${current.type}es`;
+-      } else if (current.type.slice(-1) === 'y') {
+-        plur = current.type.replace(/y$/, 'ies');
++// Go from something like this:
++//
++// [ { type: "list_item_start" },
++//   { type: "text",
++//     text: "`options` {Object|string}" },
++//   { type: "list_start",
++//     ordered: false },
++//   { type: "list_item_start" },
++//   { type: "text",
++//     text: "`encoding` {string|null} **Default:** `'utf8'`" },
++//   { type: "list_item_end" },
++//   { type: "list_item_start" },
++//   { type: "text",
++//     text: "`mode` {integer} **Default:** `0o666`" },
++//   { type: "list_item_end" },
++//   { type: "list_item_start" },
++//   { type: "text",
++//     text: "`flag` {string} **Default:** `'a'`" },
++//   { type: "space" },
++//   { type: "list_item_end" },
++//   { type: "list_end" },
++//   { type: "list_item_end" } ]
++//
++// to something like:
++//
++// [ { textRaw: "`options` {Object|string} ",
++//     options: [
++//       { textRaw: "`encoding` {string|null} **Default:** `'utf8'` ",
++//         name: "encoding",
++//         type: "string|null",
++//         default: "`'utf8'`" },
++//       { textRaw: "`mode` {integer} **Default:** `0o666` ",
++//         name: "mode",
++//         type: "integer",
++//         default: "`0o666`" },
++//       { textRaw: "`flag` {string} **Default:** `'a'` ",
++//         name: "flag",
++//         type: "string",
++//         default: "`'a'`" } ],
++//     name: "options",
++//     type: "Object|string",
++//     optional: true } ]
++
++function processList(section) {
++  const { list } = section;
++  const values = [];
++  const stack = [];
++  let current;
++
++  // For now, *just* build the hierarchical list.
++  list.forEach((tok) => {
++    const { type } = tok;
++    if (type === 'space') return;
++    if (type === 'list_item_start' || type === 'loose_item_start') {
++      const item = {};
++      if (!current) {
++        values.push(item);
++        current = item;
+       } else {
+-        plur = `${current.type}s`;
++        current.options = current.options || [];
++        stack.push(current);
++        current.options.push(item);
++        current = item;
++      }
++    } else if (type === 'list_item_end') {
++      if (!current) {
++        throw new Error('invalid list - end without current item\n' +
++                        `${JSON.stringify(tok)}\n` +
++                        JSON.stringify(list));
++      }
++      current = stack.pop();
++    } else if (type === 'text') {
++      if (!current) {
++        throw new Error('invalid list - text without current item\n' +
++                        `${JSON.stringify(tok)}\n` +
++                        JSON.stringify(list));
+       }
++      current.textRaw = `${current.textRaw || ''}${tok.text} `;
++    }
++  });
++
++  // Shove the name in there for properties,
++  // since they are always just going to be the value etc.
++  if (section.type === 'property' && values[0]) {
++    values[0].textRaw = `\`${section.name}\` ${values[0].textRaw}`;
++  }
+ 
+-      // Classes sometimes have various 'ctor' children
+-      // which are actually just descriptions of a constructor class signature.
+-      // Merge them into the parent.
+-      if (current.type === 'class' && current.ctors) {
+-        current.signatures = current.signatures || [];
+-        const sigs = current.signatures;
+-        current.ctors.forEach((ctor) => {
+-          ctor.signatures = ctor.signatures || [{}];
+-          ctor.signatures.forEach((sig) => {
+-            sig.desc = ctor.desc;
+-          });
+-          sigs.push(...ctor.signatures);
+-        });
+-        delete current.ctors;
+-      }
+-
+-      // Properties are a bit special.
+-      // Their "type" is the type of object, not "property".
+-      if (current.type === 'property') {
+-        if (current.typeof) {
+-          current.type = current.typeof;
+-          delete current.typeof;
+-        } else {
+-          delete current.type;
++  // Now pull the actual values out of the text bits.
++  values.forEach(parseListItem);
++
++  // Now figure out what this list actually means.
++  // Depending on the section type, the list could be different things.
++
++  switch (section.type) {
++    case 'ctor':
++    case 'classMethod':
++    case 'method': {
++      // Each item is an argument, unless the name is 'return',
++      // in which case it's the return value.
++      const sig = {};
++      section.signatures = section.signatures || [];
++      sig.params = values.filter((value) => {
++        if (value.name === 'return') {
++          sig.return = value;
++          return false;
+         }
+-      }
++        return true;
++      });
++      parseSignature(section.textRaw, sig);
++      if (!sig.jump) section.signatures.push(sig);
++      break;
++    }
+ 
+-      // If the parent's type is 'misc', then it's just a random
+-      // collection of stuff, like the "globals" section.
+-      // Make the children top-level items.
+-      if (current.type === 'misc') {
+-        Object.keys(current).forEach((key) => {
+-          switch (key) {
+-            case 'textRaw':
+-            case 'name':
+-            case 'type':
+-            case 'desc':
+-            case 'miscs':
+-              return;
+-            default:
+-              if (parent.type === 'misc') {
+-                return;
+-              }
+-              if (parent[key] && Array.isArray(parent[key])) {
+-                parent[key] = parent[key].concat(current[key]);
+-              } else if (!parent[key]) {
+-                parent[key] = current[key];
+-              }
+-          }
+-        });
+-      }
++    case 'property': {
++      // There should be only one item, which is the value.
++      // Copy the data up to the section.
++      const value = values[0] || {};
++      delete value.name;
++      section.typeof = value.type || section.typeof;
++      delete value.type;
++      Object.keys(value).forEach((key) => {
++        section[key] = value[key];
++      });
++      break;
++    }
+ 
+-      // Add this section to the parent. Sometimes we have two headings with a
+-      // single blob of description. If the preceding entry at this level
+-      // shares a name and is lacking a description, copy it backwards.
+-      if (!parent[plur]) parent[plur] = [];
+-      const prev = parent[plur].slice(-1)[0];
+-      if (prev && prev.name === current.name && !prev.desc) {
+-        prev.desc = current.desc;
++    case 'event':
++      // Event: each item is an argument.
++      section.params = values;
++      break;
++
++    default:
++      if (section.list.length > 0) {
++        section.desc = section.desc || [];
++        section.desc.push(...section.list);
+       }
+-      parent[plur].push(current);
+-    }
+-  };
++  }
++
++  delete section.list;
+ }
+ 
+ 
+@@ -290,7 +327,6 @@
+ // text: "someobject.someMethod(a[, b=100][, c])"
+ function parseSignature(text, sig) {
+   const list = [];
+-
+   let [, sigParams] = text.match(paramExpr) || [];
+   if (!sigParams) return;
+   sigParams = sigParams.split(',');
+@@ -346,15 +382,8 @@
+       }
+ 
+       if (!listParam) {
+-        if (sigParam.startsWith('...')) {
+-          listParam = { name: sigParam };
+-        } else {
+-          throw new Error(
+-            `Invalid param "${sigParam}"\n` +
+-            ` > ${JSON.stringify(listParam)}\n` +
+-            ` > ${text}`
+-          );
+-        }
++        sig.jump = true;
++        return;
+       }
+     }
+ 
+@@ -363,7 +392,6 @@
+ 
+     list.push(listParam);
+   });
+-
+   sig.params = list;
+ }
+ 
+@@ -374,37 +402,30 @@
+ const leadingHyphen = /^-\s*/;
+ const defaultExpr = /\s*\*\*Default:\*\*\s*([^]+)$/i;
+ 
+-function parseListItem(item, file) {
+-  const current = {};
+-
+-  current.textRaw = item.children.filter((node) => node.type !== 'list')
+-    .map((node) => (
+-      file.contents.slice(node.position.start.offset, node.position.end.offset))
+-    )
+-    .join('').replace(/\s+/g, ' ').replace(/<!--.*?-->/sg, '');
+-  let text = current.textRaw;
+-
+-  if (!text) {
++function parseListItem(item) {
++  if (item.options) item.options.forEach(parseListItem);
++  if (!item.textRaw) {
+     throw new Error(`Empty list item: ${JSON.stringify(item)}`);
+   }
+ 
+-  // The goal here is to find the name, type, default.
++  // The goal here is to find the name, type, default, and optional.
+   // Anything left over is 'desc'.
++  let text = item.textRaw.trim();
+ 
+   if (returnExpr.test(text)) {
+-    current.name = 'return';
++    item.name = 'return';
+     text = text.replace(returnExpr, '');
+   } else {
+     const [, name] = text.match(nameExpr) || [];
+     if (name) {
+-      current.name = name;
++      item.name = name;
+       text = text.replace(nameExpr, '');
+     }
+   }
+ 
+   const [, type] = text.match(typeExpr) || [];
+   if (type) {
+-    current.type = type;
++    item.type = type;
+     text = text.replace(typeExpr, '');
+   }
+ 
+@@ -412,25 +433,147 @@
+ 
+   const [, defaultValue] = text.match(defaultExpr) || [];
+   if (defaultValue) {
+-    current.default = defaultValue.replace(/\.$/, '');
++    item.default = defaultValue.replace(/\.$/, '');
+     text = text.replace(defaultExpr, '');
+   }
+ 
+-  if (text) current.desc = text;
++  if (text) item.desc = text;
++}
++
++
++function finishSection(section, parent) {
++  if (!section || !parent) {
++    throw new Error('Invalid finishSection call\n' +
++                    `${JSON.stringify(section)}\n` +
++                    JSON.stringify(parent));
++  }
++
++  if (!section.type) {
++    section.type = 'module';
++    if (parent.type === 'misc') {
++      section.type = 'misc';
++    }
++    section.displayName = section.name;
++    section.name = section.name.toLowerCase()
++      .trim().replace(/\s+/g, '_');
++  }
++
++  if (section.desc && Array.isArray(section.desc)) {
++    section.desc.links = section.desc.links || [];
++    section.desc = marked.parser(section.desc);
++  }
++
++  if (!section.list) section.list = [];
++  processList(section);
++
++  // Classes sometimes have various 'ctor' children
++  // which are actually just descriptions of a constructor class signature.
++  // Merge them into the parent.
++  if (section.type === 'class' && section.ctors) {
++    section.signatures = section.signatures || [];
++    const sigs = section.signatures;
++    section.ctors.forEach((ctor) => {
++      ctor.signatures = ctor.signatures || [{}];
++      ctor.signatures.forEach((sig) => {
++        sig.desc = ctor.desc;
++      });
++      sigs.push(...ctor.signatures);
++    });
++    delete section.ctors;
++  }
++
++  // Properties are a bit special.
++  // Their "type" is the type of object, not "property".
++  if (section.properties) {
++    section.properties.forEach((prop) => {
++      if (prop.typeof) {
++        prop.type = prop.typeof;
++        delete prop.typeof;
++      } else {
++        delete prop.type;
++      }
++    });
++  }
++
++  // Handle clones.
++  if (section.clone) {
++    const { clone } = section;
++    delete section.clone;
++    delete clone.clone;
++    deepCopy(section, clone);
++    finishSection(clone, parent);
++  }
++
++  let plur;
++  if (section.type.slice(-1) === 's') {
++    plur = `${section.type}es`;
++  } else if (section.type.slice(-1) === 'y') {
++    plur = section.type.replace(/y$/, 'ies');
++  } else {
++    plur = `${section.type}s`;
++  }
+ 
+-  const options = item.children.find((child) => child.type === 'list');
+-  if (options) {
+-    current.options = options.children.map((child) => (
+-      parseListItem(child, file)
+-    ));
++  // If the parent's type is 'misc', then it's just a random
++  // collection of stuff, like the "globals" section.
++  // Make the children top-level items.
++  if (section.type === 'misc') {
++    Object.keys(section).forEach((key) => {
++      switch (key) {
++        case 'textRaw':
++        case 'name':
++        case 'type':
++        case 'desc':
++        case 'miscs':
++          return;
++        default:
++          if (parent.type === 'misc') {
++            return;
++          }
++          if (parent[key] && Array.isArray(parent[key])) {
++            parent[key] = parent[key].concat(section[key]);
++          } else if (!parent[key]) {
++            parent[key] = section[key];
++          }
++      }
++    });
+   }
+ 
+-  return current;
++  parent[plur] = parent[plur] || [];
++  parent[plur].push(section);
++}
++
++
++// Not a general purpose deep copy.
++// But sufficient for these basic things.
++function deepCopy(src, dest) {
++  Object.keys(src)
++    .filter((key) => !dest.hasOwnProperty(key))
++    .forEach((key) => { dest[key] = cloneValue(src[key]); });
++}
++
++function cloneValue(src) {
++  if (!src) return src;
++  if (Array.isArray(src)) {
++    const clone = new Array(src.length);
++    src.forEach((value, i) => {
++      clone[i] = cloneValue(value);
++    });
++    return clone;
++  }
++  if (typeof src === 'object') {
++    const clone = {};
++    Object.keys(src).forEach((key) => {
++      clone[key] = cloneValue(src[key]);
++    });
++    return clone;
++  }
++  return src;
+ }
+ 
+-// This section parses out the contents of an H# tag.
+ 
+-// To reduce escape slashes in RegExp string components.
++// This section parse out the contents of an H# tag.
++
++// To reduse escape slashes in RegExp string components.
+ const r = String.raw;
+ 
+ const eventPrefix = '^Event: +';
+@@ -478,9 +621,7 @@
+     `^${maybeClassPropertyPrefix}${ancestors}(${id})${noCallOrProp}$`, 'i') },
+ ];
+ 
+-function newSection(header, file) {
+-  const text = textJoin(header.children, file);
+-
++function newSection({ text }) {
+   // Infer the type from the text.
+   for (const { type, re } of headingExpressions) {
+     const [, name] = text.match(re) || [];
+@@ -490,22 +631,3 @@
+   }
+   return { textRaw: text, name: text };
+ }
+-
+-function textJoin(nodes, file) {
+-  return nodes.map((node) => {
+-    if (node.type === 'linkReference') {
+-      return file.contents.slice(node.position.start.offset,
+-                                 node.position.end.offset);
+-    } else if (node.type === 'inlineCode') {
+-      return `\`${node.value}\``;
+-    } else if (node.type === 'strong') {
+-      return `**${textJoin(node.children, file)}**`;
+-    } else if (node.type === 'emphasis') {
+-      return `_${textJoin(node.children, file)}_`;
+-    } else if (node.children) {
+-      return textJoin(node.children, file);
+-    } else {
+-      return node.value;
+-    }
+-  }).join('');
+-}
+--- a/tools/doc/package.json
++++ b/tools/doc/package.json
+@@ -7,19 +7,17 @@
+     "node": ">=6"
+   },
+   "dependencies": {
++    "marked": "^0.3.5",
+     "rehype-raw": "^2.0.0",
+     "rehype-stringify": "^3.0.0",
+-    "remark-html": "^7.0.0",
+     "remark-parse": "^5.0.0",
+     "remark-rehype": "^3.0.0",
+-    "to-vfile": "^5.0.1",
+     "unified": "^7.0.0",
+     "unist-util-find": "^1.0.1",
+-    "unist-util-select": "^1.5.0",
+-    "unist-util-visit": "^1.4.0"
++    "unist-util-visit": "^1.3.1"
+   },
+   "devDependencies": {
+-    "js-yaml": "^3.12.2"
++    "js-yaml": "^3.5.2"
+   },
+   "optionalDependencies": {},
+   "bin": "./generate.js"
+--- a/tools/doc/allhtml.js
++++ b/tools/doc/allhtml.js
+@@ -84,5 +84,5 @@
+ 
+ const hrefRe = / href="#(\w+)"/g;
+ while (match = hrefRe.exec(all)) {
+-  if (!ids.has(match[1])) throw new Error(`link not found: ${match[1]}`);
++  if (!ids.has(match[1])) console.warn(`link not found: ${match[1]}`);
+ }

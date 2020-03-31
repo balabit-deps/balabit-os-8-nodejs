@@ -1,0 +1,32 @@
+Description: Lower SECLEVEL in the openssl.cnf used for testing
+ In Ubuntu SECLEVEL is compiled into openssl, rather than
+ set/unset from system openssl.cnf.
+Author: Dimitri John Ledkov <xnox@ubuntu.com>
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/1858971
+
+
+--- nodejs-10.17.0~dfsg.orig/deps/openssl/openssl/apps/openssl.cnf
++++ nodejs-10.17.0~dfsg/deps/openssl/openssl/apps/openssl.cnf
+@@ -11,6 +11,8 @@
+ # defined.
+ HOME			= .
+ 
++openssl_conf = default_conf
++
+ # Extra OBJECT IDENTIFIER info:
+ #oid_file		= $ENV::HOME/.oid
+ oid_section		= new_oids
+@@ -348,3 +350,13 @@ ess_cert_id_chain	= no	# Must the ESS ce
+ 				# (optional, default: no)
+ ess_cert_id_alg		= sha1	# algorithm to compute certificate
+ 				# identifier (optional, default: sha1)
++
++[default_conf]
++ssl_conf = ssl_sect
++
++[ssl_sect]
++system_default = system_default_sect
++
++[system_default_sect]
++MinProtocol = TLSv1.2
++CipherString = DEFAULT@SECLEVEL=1

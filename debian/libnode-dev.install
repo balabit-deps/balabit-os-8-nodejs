@@ -1,0 +1,5 @@
+src/*.h usr/include/nodejs/src
+deps/v8/include/*.h usr/include/nodejs/deps/v8/include
+deps/v8/include/libplatform/*.h usr/include/nodejs/deps/v8/include/libplatform
+common.gypi usr/include/nodejs
+deps/openssl/openssl/apps/openssl.cnf usr/include/nodejs

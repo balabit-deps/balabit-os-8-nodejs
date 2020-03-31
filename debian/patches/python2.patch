@@ -1,0 +1,15 @@
+Description: Use python2 in one more place.
+Author: Dimitri John Ledkov <xnox@ubuntu.com>
+
+
+--- nodejs-10.17.0~dfsg.orig/test/parallel/test-child-process-set-blocking.js
++++ nodejs-10.17.0~dfsg/test/parallel/test-child-process-set-blocking.js
+@@ -26,7 +26,7 @@ const ch = require('child_process');
+ 
+ const SIZE = 100000;
+ 
+-const cp = ch.spawn('python', ['-c', `print ${SIZE} * "C"`], {
++const cp = ch.spawn('python2', ['-c', `print ${SIZE} * "C"`], {
+   stdio: 'inherit'
+ });
+ 

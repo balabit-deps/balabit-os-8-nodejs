@@ -1,0 +1,91 @@
+Description: Multiarch search path, arch triplet, DFHS path for modules
+Author: "Bastien ROUCARIÈS" <roucaries.bastien@gmail.com>
+Last-Update: 2018-09-30
+Forwarded: https://github.com/nodejs/node/issues/22745
+--- a/lib/internal/modules/cjs/loader.js
++++ b/lib/internal/modules/cjs/loader.js
+@@ -843,6 +843,7 @@
+ 
+ Module._initPaths = function() {
+   const isWindows = process.platform === 'win32';
++  const relativePaths = process.config.variables.node_relative_path;
+ 
+   var homeDir;
+   var nodePath;
+@@ -863,7 +864,17 @@
+   } else {
+     prefixDir = path.resolve(process.execPath, '..', '..');
+   }
+-  var paths = [path.resolve(prefixDir, 'lib', 'node')];
++  var postDirs = [];
++  if (relativePaths) {
++    relativePaths.split(path.delimiter).map(path => {
++      if (path) postDirs.push(path);
++    });
++  } else {
++    postDirs.push(path.join('lib', 'node'));
++  }
++  var paths = postDirs.map(postDir => {
++    return path.resolve(prefixDir, postDir);
++  });
+ 
+   if (homeDir) {
+     paths.unshift(path.resolve(homeDir, '.node_libraries'));
+--- a/configure.py
++++ b/configure.py
+@@ -80,6 +80,11 @@
+     dest='coverage',
+     help='Build node with code coverage enabled')
+ 
++parser.add_option('--arch-triplet',
++    action='store',
++    dest='arch_triplet',
++    help='arch triplet used by distro')
++
+ parser.add_option('--debug',
+     action='store_true',
+     dest='debug',
+@@ -113,6 +118,11 @@
+     dest='gdb',
+     help='add gdb support')
+ 
++parser.add_option('--node-relative-path',
++    action='store',
++    dest='node_relative_path',
++    help='Node path(s) used by require, resolved relative to prefix dir.')
++
+ parser.add_option('--no-ifaddrs',
+     action='store_true',
+     dest='no_ifaddrs',
+@@ -1125,6 +1135,16 @@
+   else:
+     o['variables']['node_target_type'] = 'executable'
+ 
++  if options.arch_triplet:
++    o['variables']['arch_triplet'] = options.arch_triplet
++  else:
++    o['variables']['arch_triplet'] = 'unknown-unknown-unknown'
++
++  if options.node_relative_path:
++    o['variables']['node_relative_path'] = options.node_relative_path
++  else:
++    o['variables']['node_relative_path']= ''
++
+ def configure_library(lib, output):
+   shared_lib = 'shared_' + lib
+   output['variables']['node_' + shared_lib] = b(getattr(options, shared_lib))
+--- a/test/parallel/test-module-loading-globalpaths.js
++++ b/test/parallel/test-module-loading-globalpaths.js
+@@ -73,10 +73,10 @@
+ 
+   // Test module in $PREFIX/lib/node.
+   // Write module into $PREFIX/lib/node.
+-  const expectedString = '$PREFIX/lib/node';
++  const expectedString = '$PREFIX/lib/nodejs';
+   const prefixLibPath = path.join(prefixPath, 'lib');
+   fs.mkdirSync(prefixLibPath);
+-  const prefixLibNodePath = path.join(prefixLibPath, 'node');
++  const prefixLibNodePath = path.join(prefixLibPath, 'nodejs');
+   fs.mkdirSync(prefixLibNodePath);
+   const pkgPath = path.join(prefixLibNodePath, `${pkgName}.js`);
+   fs.writeFileSync(pkgPath, `exports.string = '${expectedString}';`);

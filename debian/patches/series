@@ -1,0 +1,17 @@
+ssl111e-test-fix.patch
+acorn6.patch
+dfhs_module_path_arch_triplet.patch
+ssl/e5b03b82f72e6915bd24c7ef1481abd1842b84fe.patch
+use_system_node_gyp.patch
+privacy_breach.patch
+make-doc.patch
+1005_restore_sh_javascript_nonminified.patch
+2017_mips_configure_fpu.patch
+test_ci_buildd.patch
+fix_disable_cctest.patch
+benchmark_without_alice.patch
+temporarily_silence_buffer_deprecations.patch
+atomic.patch
+test-lowerseclevel.patch
+python2.patch
+0001-test-move-foafssl-certs-to-fixtures-keys.patch

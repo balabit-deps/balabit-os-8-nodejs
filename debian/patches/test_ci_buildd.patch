@@ -1,0 +1,121 @@
+Description: adapt test-ci build target for buildd
+ * run tests with ./node
+ * remove addons from test-ci suite, because it creates a dependency loop
+   nodejs -> node-gyp -> nodejs which is painful to manage.
+ * disabled because it requires stdin:
+   + test-stdout-close-unref
+   + test-regress-GH-746
+ * test-tick-processor fails on ppc64 and s390x, currently investigated
+   https://github.com/nodejs/node/issues/2471
+ * test-cluster-disconnect sometimes fails on busy buildd, forwarded upstream
+   https://github.com/nodejs/node/issues/3383
+ * test-fs-watch is flaky, might be related to https://github.com/nodejs/node/issues/4082
+ * huge timeout value for all platforms, buildd could be busy
+ * test-npm-install must fail, debian package dfsg-repacked npm out
+ * ability to override CI_NATIVE_SUITES, CI_JS_SUITES
+ * disable tests failing because DNS is disabled
+ * sequential/test-http2-session-timeout is flaky https://github.com/nodejs/node/issues/20628
+Forwarded: not-needed
+Last-Update: 2016-03-09
+Author: Jérémy Lal <kapouer@melix.org>
+--- a/Makefile
++++ b/Makefile
+@@ -435,7 +435,7 @@
+ # This target should not use a native compiler at all
+ # Related CI job: node-test-commit-arm-fanned
+ test-ci-js: | clear-stalled
+-	$(PYTHON) tools/test.py $(PARALLEL_ARGS) -p tap --logfile test.tap \
++	$(PYTHON) tools/test.py $(PARALLEL_ARGS) -p tap \
+ 		--mode=$(BUILDTYPE_LOWER) --flaky-tests=$(FLAKY_TESTS) \
+ 		$(TEST_CI_ARGS) $(CI_JS_SUITES) --skip-tests=sequential/test-benchmark-napi
+ 	@echo "Clean up any leftover processes, error if found."
+--- a/test/parallel/parallel.status
++++ b/test/parallel/parallel.status
+@@ -10,6 +10,35 @@
+ # https://github.com/nodejs/node/issues/24305
+ test-trace-events-api-worker-disabled: PASS,FLAKY
+ 
++test-process-config                  : PASS,FLAKY
++test-regress-GH-746                  : PASS,FLAKY
++test-stdout-close-unref              : PASS,FLAKY
++test-npm-install                     : FAIL
++# skip tests accessing network
++test-dns                             : SKIP
++test-net-connect-immediate-finish    : SKIP
++test-net-better-error-messages-port-hostname : SKIP
++
++# in debian build env, skip because it somehow tries to access network
++test-https-connect-address-family : SKIP 
++test-tls-connect-address-family : SKIP
++test-dns-cancel-reverse-lookup: SKIP
++
++# https://bugs.debian.org/919588
++## flaky on some user environments
++test-net-listen-after-destroying-stdin: PASS,FLAKY
++## fails when running with eatmydata
++test-fs-error-messages: PASS,FLAKY
++
++# should have been disabled 'cause openssl 1.1.0
++test-tls-ecdh-disable : SKIP
++
++# only works with zlib >= 1.2.11
++test-zlib-failed-init: SKIP
++
++# might fail, see https://github.com/nodejs/node/issues/17909
++test-fs-utimes: PASS,FLAKY
++
+ [$system==win32]
+ test-http2-pipe: PASS,FLAKY
+ test-worker-syntax-error: PASS,FLAKY
+@@ -33,6 +62,10 @@
+ # https://github.com/nodejs/node/issues/26401
+ test-worker-prof: PASS,FLAKY
+ 
++[$arch==mips64el]
++# the debug flag is for hacking v8 internals
++test-debug-args: PASS,FLAKY
++
+ [$system==solaris] # Also applies to SmartOS
+ 
+ [$system==freebsd]
+--- a/test/sequential/sequential.status
++++ b/test/sequential/sequential.status
+@@ -8,6 +8,12 @@
+ # https://github.com/nodejs/node/issues/22336
+ test-gc-http-client: PASS,FLAKY
+ 
++# flaky or failing at least on debian build servers
++test-fs-watch                                   : PASS,FLAKY
++test-force-repl                                 : SKIP
++test-performance                                : SKIP
++test-http2-session-timeout                      : PASS,FLAKY
++
+ [$system==win32]
+ # https://github.com/nodejs/node/issues/22327
+ test-http2-large-file: PASS, FLAKY
+--- a/tools/test.py
++++ b/tools/test.py
+@@ -880,12 +880,7 @@
+     self.node_has_crypto = True
+ 
+   def GetVm(self, arch, mode):
+-    if self.vm is not None:
+-      return self.vm
+-    if arch == 'none':
+-      name = 'out/Debug/node' if mode == 'debug' else 'out/Release/node'
+-    else:
+-      name = 'out/%s.%s/node' % (arch, mode)
++    name = './node'
+ 
+     # Currently GYP does not support output_dir for MSVS.
+     # http://code.google.com/p/gyp/issues/detail?id=40
+--- a/test/common/index.js
++++ b/test/common/index.js
+@@ -226,6 +226,7 @@
+ 
+ 
+ function platformTimeout(ms) {
++  return 20 * ms; // for debian build servers
+   if (process.features.debug)
+     ms = 2 * ms;
+ 

@@ -1,0 +1,30 @@
+Description: only emit Buffer DEP0005 warning if --pending-deprecation is set
+Author: Jérémy Lal <kapouer@melix.org>
+Forwarded: not-needed, upstream wants to do otherwise
+Last-Update: 2019-01-06
+--- a/lib/buffer.js
++++ b/lib/buffer.js
+@@ -145,8 +145,7 @@
+ function showFlaggedDeprecation() {
+   if (bufferWarningAlreadyEmitted ||
+       ++nodeModulesCheckCounter > 10000 ||
+-      (!pendingDeprecation &&
+-       isInsideNodeModules())) {
++      !pendingDeprecation) {
+     // We don't emit a warning, because we either:
+     // - Already did so, or
+     // - Already checked too many times whether a call is coming
+--- a/test/parallel/parallel.status
++++ b/test/parallel/parallel.status
+@@ -30,6 +30,11 @@
+ ## fails when running with eatmydata
+ test-fs-error-messages: PASS,FLAKY
+ 
++# pending deprecation for buffer is off
++test-buffer-constructor-node-modules-paths : SKIP
++test-buffer-constructor-deprecation-error : SKIP
++test-buffer-constructor-outside-node-modules : SKIP
++
+ # should have been disabled 'cause openssl 1.1.0
+ test-tls-ecdh-disable : SKIP
+ 
