@@ -15,3 +15,7 @@ atomic.patch
 test-lowerseclevel.patch
 python2.patch
 0001-test-move-foafssl-certs-to-fixtures-keys.patch
+CVE-2020-8174.patch
+CVE-2020-8265.patch
+CVE-2020-8287.patch
+test_update_test-tls-passphrase.patch

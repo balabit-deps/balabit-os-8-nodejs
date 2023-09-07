@@ -1,3 +1,18 @@
+nodejs (10.19.0~dfsg-3ubuntu1.1) focal-security; urgency=medium
+
+  * SECURITY UPDATE: Denial of Service
+    - debian/patches/CVE-2020-8174.patch: fixed a buffer overflows in nodejs
+    - debian/patches/CVE-2020-8265.patch: fixed a use-after-free in TLSWrap
+    - debian/patches/CVE-2020-8287.patch: fixed an HTTP Request Smuggling
+      issue in Transfer-Encoding
+    - CVE-2020-8174
+    - CVE-2020-8265
+    - CVE-2020-8287
+  * debian/patches/test_update_test-tls-passphrase.patch: fixed the error with
+    tls-passphrase test
+
+ -- Amir Naseredini <amir.naseredini@canonical.com>  Thu, 07 Sep 2023 12:20:44 +0100
+
 nodejs (10.19.0~dfsg-3ubuntu1) focal; urgency=medium
 
   * Merge from Debian (LP: #1863463). Remaining changes:
