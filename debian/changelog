@@ -1,3 +1,15 @@
+nodejs (10.19.0~dfsg-3ubuntu1.2) focal-security; urgency=medium
+
+  * SECURITY UPDATE: Denial of Service
+    - debian/patches/CVE-2021-22883.patch: fixed a memory exhaustion in http2
+      module
+    - CVE-2021-22883
+  * SECURITY UPDATE: Remote Code Execution
+    - debian/patches/CVE-2021-22884.patch: fixed a DNS rebinding in nodejs
+    - CVE-2021-22884
+
+ -- Amir Naseredini <amir.naseredini@canonical.com>  Fri, 29 Sep 2023 13:26:08 +0100
+
 nodejs (10.19.0~dfsg-3ubuntu1.1) focal-security; urgency=medium
 
   * SECURITY UPDATE: Denial of Service

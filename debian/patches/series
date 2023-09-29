@@ -19,3 +19,5 @@ CVE-2020-8174.patch
 CVE-2020-8265.patch
 CVE-2020-8287.patch
 test_update_test-tls-passphrase.patch
+CVE-2021-22883.patch
+CVE-2021-22884.patch
