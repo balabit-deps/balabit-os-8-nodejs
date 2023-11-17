@@ -1,3 +1,15 @@
+nodejs (10.19.0~dfsg-3ubuntu1.3) focal-security; urgency=medium
+
+  * SECURITY UPDATE: Arbitrary Code Execution
+    - debian/patches/CVE-2022-32212-1.patch: fixed IPv4 validation in
+      inspector_socket
+    - debian/patches/CVE-2022-32212-2.patch: fixed IPv4 non routable validation
+    - debian/patches/CVE-2022-43548.patch: harden IP address validation again
+    - CVE-2022-32212
+    - CVE-2022-43548
+
+ -- Amir Naseredini <amir.naseredini@canonical.com>  Fri, 17 Nov 2023 11:11:22 +0000
+
 nodejs (10.19.0~dfsg-3ubuntu1.2) focal-security; urgency=medium
 
   * SECURITY UPDATE: Denial of Service
