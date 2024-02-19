@@ -1,0 +1,67 @@
+From a158d412b323001590099594002ed2426bcbaf8b Mon Sep 17 00:00:00 2001
+From: Ruben Bridgewater <ruben@bridgewater.de>
+Date: Thu, 26 Apr 2018 05:02:46 +0200
+Subject: [PATCH] dns: report out of memory properly
+
+This addresses a part of a TODO by properly reporting an out of
+memory error to the user instead of reporting `ENOTFOUND`.
+
+PR-URL: https://github.com/nodejs/node/pull/20317
+Reviewed-By: Ben Noordhuis <info@bnoordhuis.nl>
+Reviewed-By: Colin Ihrig <cjihrig@gmail.com>
+Reviewed-By: Trivikram Kamat <trivikr.dev@gmail.com>
+---
+ lib/internal/errors.js               | 5 +----
+ test/parallel/test-http-dns-error.js | 2 +-
+ test/parallel/test-net-dns-error.js  | 2 +-
+ 3 files changed, 3 insertions(+), 6 deletions(-)
+
+diff --git a/lib/internal/errors.js b/lib/internal/errors.js
+index 5299b66c83106..12d402a95fb7a 100644
+--- a/lib/internal/errors.js
++++ b/lib/internal/errors.js
+@@ -29,7 +29,6 @@ const READABLE_OPERATOR = {
+ 
+ const {
+   errmap,
+-  UV_EAI_MEMORY,
+   UV_EAI_NODATA,
+   UV_EAI_NONAME
+ } = process.binding('uv');
+@@ -640,9 +639,7 @@ function dnsException(code, syscall, hostname) {
+   if (typeof code === 'number') {
+     // FIXME(bnoordhuis) Remove this backwards compatibility nonsense and pass
+     // the true error to the user. ENOTFOUND is not even a proper POSIX error!
+-    if (code === UV_EAI_MEMORY ||
+-        code === UV_EAI_NODATA ||
+-        code === UV_EAI_NONAME) {
++    if (code === UV_EAI_NODATA || code === UV_EAI_NONAME) {
+       code = 'ENOTFOUND'; // Fabricated error name.
+     } else {
+       code = lazyInternalUtil().getSystemErrorName(code);
+diff --git a/test/parallel/test-http-dns-error.js b/test/parallel/test-http-dns-error.js
+index 06a15c89fb46b..e3d09a39d0e27 100644
+--- a/test/parallel/test-http-dns-error.js
++++ b/test/parallel/test-http-dns-error.js
+@@ -29,7 +29,7 @@ const assert = require('assert');
+ const http = require('http');
+ const https = require('https');
+ 
+-const host = '*'.repeat(256);
++const host = '*'.repeat(64);
+ const MAX_TRIES = 5;
+ 
+ let errCode = 'ENOTFOUND';
+diff --git a/test/parallel/test-net-dns-error.js b/test/parallel/test-net-dns-error.js
+index 0d943bf6cd54a..bb90eafc3d95d 100644
+--- a/test/parallel/test-net-dns-error.js
++++ b/test/parallel/test-net-dns-error.js
+@@ -25,7 +25,7 @@ const common = require('../common');
+ const assert = require('assert');
+ const net = require('net');
+ 
+-const host = '*'.repeat(256);
++const host = '*'.repeat(64);
+ const errCode = common.isOpenBSD ? 'EAI_FAIL' : 'ENOTFOUND';
+ 
+ const socket = net.connect(42, host, common.mustNotCall());

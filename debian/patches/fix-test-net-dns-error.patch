@@ -1,0 +1,49 @@
+From 077f9dc6036b97e9e12e3681e3c3bdf29d44de2b Mon Sep 17 00:00:00 2001
+From: Vita Batrla <vita.batrla@gmail.com>
+Date: Thu, 13 Feb 2020 19:17:42 +0100
+Subject: [PATCH] test: allow EAI_FAIL in test-net-dns-error.js
+
+Test test-net-dns-error.js causes assertion failure on SunOS,
+test expects ENOTFOUND, but OS returns EAI_FAIL.
+
+Maximum length of a host name is 63 characters.
+Test test-net-dns-error.js makes a connection attempt to
+invalid host name (longer than maximum). Such
+connection attempt on SunOS returns permanent failure
+(EAI_FAIL) as invalid hostname won't be ever resolved.
+
+PR-URL: https://github.com/nodejs/node/pull/31780
+Reviewed-By: Ben Noordhuis <info@bnoordhuis.nl>
+Reviewed-By: Colin Ihrig <cjihrig@gmail.com>
+Reviewed-By: James M Snell <jasnell@gmail.com>
+Reviewed-By: Anna Henningsen <anna@addaleax.net>
+Reviewed-By: Rich Trott <rtrott@gmail.com>
+Reviewed-By: Luigi Pinca <luigipinca@gmail.com>
+---
+ test/parallel/test-net-dns-error.js | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/test/parallel/test-net-dns-error.js b/test/parallel/test-net-dns-error.js
+index bb90eafc3d95d..7232ef10ebb45 100644
+--- a/test/parallel/test-net-dns-error.js
++++ b/test/parallel/test-net-dns-error.js
+@@ -26,15 +26,16 @@ const assert = require('assert');
+ const net = require('net');
+ 
+ const host = '*'.repeat(64);
+-const errCode = common.isOpenBSD ? 'EAI_FAIL' : 'ENOTFOUND';
++// Resolving hostname > 63 characters may return EAI_FAIL (permanent failure).
++const errCodes = ['ENOTFOUND', 'EAI_FAIL'];
+ 
+ const socket = net.connect(42, host, common.mustNotCall());
+ socket.on('error', common.mustCall(function(err) {
+-  assert.strictEqual(err.code, errCode);
++  assert(errCodes.includes(err.code), err);
+ }));
+ socket.on('lookup', common.mustCall(function(err, ip, type) {
+   assert(err instanceof Error);
+-  assert.strictEqual(err.code, errCode);
++  assert(errCodes.includes(err.code), err);
+   assert.strictEqual(ip, undefined);
+   assert.strictEqual(type, undefined);
+ }));

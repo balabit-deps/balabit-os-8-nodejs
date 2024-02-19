@@ -24,3 +24,7 @@ CVE-2021-22884.patch
 CVE-2022-32212-1.patch
 CVE-2022-32212-2.patch
 CVE-2022-43548.patch
+CVE-2023-23920.patch
+fix-dns-tests.patch
+fix-test-net-dns-error.patch
+fix-test-http-dns-error.patch

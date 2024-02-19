@@ -1,3 +1,15 @@
+nodejs (10.19.0~dfsg-3ubuntu1.5) focal-security; urgency=medium
+
+  * SECURITY UPDATE: Privilege Escalation
+    - debian/patches/CVE-2023-23920.patch: added `ICU_NO_USER_DATA_OVERRIDE` to
+      fix an issue with insecure loading of ICU data
+    - CVE-2023-23920
+  * debian/patches/fix-dns-tests.patch: first part of fix of two dns tests 
+  * debian/patches/fix-test-net-dns-error.patch: fixed the issue in the test 
+  * debian/patches/fix-test-http-dns-error.patch: fixed the issue in the test
+
+ -- Amir Naseredini <amir.naseredini@canonical.com>  Mon, 19 Feb 2024 16:37:59 +0000
+
 nodejs (10.19.0~dfsg-3ubuntu1.3) focal-security; urgency=medium
 
   * SECURITY UPDATE: Arbitrary Code Execution

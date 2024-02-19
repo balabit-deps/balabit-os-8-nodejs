@@ -1,0 +1,50 @@
+From 50364d98d97afd9e7dc3947c270c45ef64944a6f Mon Sep 17 00:00:00 2001
+From: cjihrig <cjihrig@gmail.com>
+Date: Tue, 30 Apr 2019 14:31:20 -0400
+Subject: [PATCH] test: allow EAI_FAIL in test-http-dns-error.js
+
+EAI_FAIL is expected on OpenBSD, and has been observed on
+platforms such as FreeBSD and Windows. This commit makes
+EAI_FAIL an acceptable error code on all platforms.
+
+PR-URL: https://github.com/nodejs/node/pull/27500
+Fixes: https://github.com/nodejs/node/issues/27487
+Reviewed-By: Richard Lau <riclau@uk.ibm.com>
+Reviewed-By: Rich Trott <rtrott@gmail.com>
+---
+ test/parallel/test-http-dns-error.js | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/test/parallel/test-http-dns-error.js b/test/parallel/test-http-dns-error.js
+index e3d09a39d0e27..20e12f24fbf4f 100644
+--- a/test/parallel/test-http-dns-error.js
++++ b/test/parallel/test-http-dns-error.js
+@@ -32,9 +32,7 @@ const https = require('https');
+ const host = '*'.repeat(64);
+ const MAX_TRIES = 5;
+ 
+-let errCode = 'ENOTFOUND';
+-if (common.isOpenBSD)
+-  errCode = 'EAI_FAIL';
++const errCodes = ['ENOTFOUND', 'EAI_FAIL'];
+ 
+ function tryGet(mod, tries) {
+   // Bad host name should not throw an uncatchable exception.
+@@ -45,7 +43,7 @@ function tryGet(mod, tries) {
+       tryGet(mod, ++tries);
+       return;
+     }
+-    assert.strictEqual(err.code, errCode);
++    assert(errCodes.includes(err.code), err);
+   }));
+   // http.get() called req1.end() for us
+ }
+@@ -61,7 +59,7 @@ function tryRequest(mod, tries) {
+       tryRequest(mod, ++tries);
+       return;
+     }
+-    assert.strictEqual(err.code, errCode);
++    assert(errCodes.includes(err.code), err);
+   }));
+   req.end();
+ }
