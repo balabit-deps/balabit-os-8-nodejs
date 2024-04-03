@@ -28,3 +28,4 @@ CVE-2023-23920.patch
 fix-dns-tests.patch
 fix-test-net-dns-error.patch
 fix-test-http-dns-error.patch
+CVE-2023-30590.patch

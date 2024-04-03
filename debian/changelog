@@ -1,3 +1,12 @@
+nodejs (10.19.0~dfsg-3ubuntu1.6) focal-security; urgency=medium
+
+  * SECURITY UPDATE: Incorrect Documentation for Diffie-Hellman APIs
+    - debian/patches/CVE-2023-30590.patch: fixed the inconsistency between the
+      documents and the function of Diffie-Hellman APIs
+    - CVE-2023-30590
+
+ -- Amir Naseredini <amir.naseredini@canonical.com>  Wed, 03 Apr 2024 09:09:55 +0100
+
 nodejs (10.19.0~dfsg-3ubuntu1.5) focal-security; urgency=medium
 
   * SECURITY UPDATE: Privilege Escalation
